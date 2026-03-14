@@ -1,0 +1,6 @@
+﻿data_resources/
+*.tar.gz
+*.zip
+token.txt
+.env
+.env.*

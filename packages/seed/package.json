@@ -1,0 +1,18 @@
+{
+  "name": "@digital-menu/seed",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "seed": "pnpm --filter @digital-menu/db build && tsx src/seed-test-data.ts"
+  },
+  "dependencies": {
+    "@digital-menu/db": "workspace:*",
+    "drizzle-orm": "^0.38.0",
+    "pg": "^8.11.5"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

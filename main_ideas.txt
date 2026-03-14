@@ -1,0 +1,226 @@
+PROJECT: Digital Menu Platform MVP
+
+OVERVIEW
+Build a digital menu platform that helps diners understand dishes through ingredient explanations, translations, and personalized filtering based on user preferences.
+
+The system connects three layers:
+1. Restaurant menu data
+2. Ingredient knowledge database
+3. User preferences and restrictions
+
+
+CORE INTERFACES
+
+1. DINER APP
+Purpose:
+Allow customers to browse menus and understand dishes.
+
+Features:
+- Browse restaurant menu
+- View dish details
+- Click/tap ingredients to see explanations
+- Ingredient dictionary cards
+- Filter menu by preferences or restrictions
+- Optional user login for personalization
+
+Typical pages:
+- Restaurant menu page
+- Menu section list
+- Dish detail page
+- Ingredient card modal
+- Filter panel
+
+
+2. RESTAURANT ADMIN PORTAL
+Purpose:
+Allow restaurants to manage menu content.
+
+Features:
+- Create and edit menu sections
+- Create and edit dishes
+- Add description, price, and image
+- Attach ingredients to dishes
+- Publish menu
+
+Important UX goal:
+Make ingredient tagging easy with search and suggestions.
+
+
+3. USER PROFILE
+Purpose:
+Store user preferences for filtering and recommendations.
+
+Features:
+- Create account
+- Add restrictions (allergy, dislike, diet)
+- Save dishes
+- Personalize menu results
+
+Example restrictions:
+- Allergy to peanut
+- Dislike cilantro
+- Vegetarian diet
+
+
+CORE DATA MODEL
+
+Main tables:
+
+restaurants
+menus
+menu_sections
+dishes
+ingredients
+ingredient_aliases
+dish_ingredients
+users
+user_restrictions
+
+Key relationships:
+
+Restaurant → Menu → Section → Dish
+
+Dish → DishIngredient → Ingredient
+
+User → UserRestriction
+
+Important rule:
+Dish ingredients belong to the restaurant's version of the dish.
+
+The same dish name can have different ingredients at different restaurants.
+
+Example:
+Pad Thai at Restaurant A may contain tofu.
+Pad Thai at Restaurant B may contain shrimp.
+
+
+INGREDIENT KNOWLEDGE LAYER
+
+Ingredients are structured entities.
+
+Each ingredient contains:
+- Canonical name
+- Aliases
+- Short description
+- Image
+- Translations (future)
+
+Example ingredient:
+
+Name: Peanut
+Aliases: Groundnut
+Description: Edible legume commonly used in Asian cuisine.
+
+This enables:
+- Ingredient dictionary
+- Clickable ingredient links
+- Menu filtering
+- Recommendation logic
+
+
+SYSTEM ARCHITECTURE
+
+Two frontend apps:
+
+1. Restaurant Admin Portal
+2. Diner + User Application
+
+Shared backend platform:
+
+- API layer
+- Shared database
+- Ingredient knowledge database
+
+Architecture structure:
+
+Admin App
+   ↓
+Backend API
+   ↓
+Database
+   ↑
+Backend API
+   ↑
+Diner/User App
+
+
+DATA FLOW
+
+Restaurant creates menu.
+
+Restaurant creates dishes.
+
+Restaurant attaches ingredients to dishes.
+
+Menu is published.
+
+Diner opens menu.
+
+System displays dishes and ingredient links.
+
+If user has preferences or restrictions:
+system compares user restrictions with dish ingredients.
+
+Example:
+
+User allergy = peanut
+Dish contains peanut
+System warns user.
+
+
+MVP SCOPE
+
+Build first:
+
+1. Ingredient database
+2. Restaurant menu CRUD
+3. Dish-to-ingredient linking
+4. Diner menu interface
+5. Ingredient explanation cards
+6. User restrictions
+7. Filtering logic
+
+Do NOT build initially:
+
+- Advanced AI recommendations
+- Medical advice logic
+- POS integrations
+- Social features
+- Full multilingual system
+- Native mobile apps
+
+
+BUILD ORDER
+
+Step 1
+Define database schema.
+
+Step 2
+Build ingredient dictionary.
+
+Step 3
+Build restaurant menu editor (admin portal).
+
+Step 4
+Build diner menu interface.
+
+Step 5
+Add ingredient cards.
+
+Step 6
+Add user profile and restrictions.
+
+Step 7
+Add filtering and recommendation labels.
+
+
+KEY INSIGHT
+
+The product is built on a structured ingredient system.
+
+Restaurant menus supply dish data.
+Ingredients provide meaning and relationships.
+User preferences personalize the experience.
+
+This creates a platform combining:
+restaurant menus + ingredient knowledge + user preferences.

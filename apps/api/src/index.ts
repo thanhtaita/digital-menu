@@ -1,0 +1,11 @@
+import { buildApp } from "./app.js";
+
+const port = Number(process.env.PORT) || 3001;
+
+buildApp()
+  .then((app) => app.listen({ port, host: "0.0.0.0" }))
+  .then(() => console.log(`API listening on http://localhost:${port}`))
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
