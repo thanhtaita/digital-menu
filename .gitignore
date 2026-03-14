@@ -1,6 +1,11 @@
-﻿data_resources/
+data_resources/
 *.tar.gz
 *.zip
 token.txt
 .env
 .env.*
+
+# Dependencies & build
+node_modules/
+dist/
+.turbo/
