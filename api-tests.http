@@ -1,0 +1,182 @@
+### Digital Menu API — REST Client (run in order; cookie from login/register is sent automatically)
+@baseUrl = http://localhost:3002
+@restaurantId = 1
+@menuId = 1
+@sectionId = 1
+@dishId = 1
+@ingredientId = 1
+
+### ========== Health ==========
+GET {{baseUrl}}/api/v1/health
+
+### ========== Auth ==========
+### Register (account only)
+# @name register
+POST {{baseUrl}}/api/v1/auth/register
+Content-Type: application/json
+
+{
+  "email": "owner@test.com",
+  "password": "password123",
+  "displayName": "Jane Owner"
+}
+
+### Register (account + restaurant)
+# @name registerWithRestaurant
+POST {{baseUrl}}/api/v1/auth/register
+Content-Type: application/json
+
+{
+  "email": "owner2@test.com",
+  "password": "password123",
+  "displayName": "Bob",
+  "restaurantName": "Bob's Kitchen",
+  "restaurantSlug": "bobs-kitchen"
+}
+
+### Login (run this to get session cookie for protected routes)
+# @name login
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "owner@test.com",
+  "password": "password123"
+}
+
+### Me (requires cookie from login/register)
+GET {{baseUrl}}/api/v1/auth/me
+
+### Logout
+POST {{baseUrl}}/api/v1/auth/logout
+
+### ========== Ingredients (no auth) ==========
+GET {{baseUrl}}/api/v1/ingredients
+
+### Search ingredients
+GET {{baseUrl}}/api/v1/ingredients?q=garlic
+
+### ========== Restaurants (auth) ==========
+GET {{baseUrl}}/api/v1/restaurants
+
+### Create restaurant
+POST {{baseUrl}}/api/v1/restaurants
+Content-Type: application/json
+
+{
+  "name": "My Restaurant",
+  "slug": "my-restaurant",
+  "description": "Optional description"
+}
+
+### Get one restaurant (set @restaurantId above)
+GET {{baseUrl}}/api/v1/restaurants/{{restaurantId}}
+
+### Update restaurant
+PATCH {{baseUrl}}/api/v1/restaurants/{{restaurantId}}
+Content-Type: application/json
+
+{
+  "name": "Updated Name",
+  "description": "New description"
+}
+
+### ========== Menus (auth) ==========
+GET {{baseUrl}}/api/v1/restaurants/{{restaurantId}}/menus
+
+### Create menu
+POST {{baseUrl}}/api/v1/restaurants/{{restaurantId}}/menus
+Content-Type: application/json
+
+{
+  "name": "Lunch Menu",
+  "displayOrder": 0
+}
+
+### Get one menu (set @menuId above)
+GET {{baseUrl}}/api/v1/restaurants/{{restaurantId}}/menus/{{menuId}}
+
+### Update menu
+PATCH {{baseUrl}}/api/v1/restaurants/{{restaurantId}}/menus/{{menuId}}
+Content-Type: application/json
+
+{
+  "name": "Main Menu",
+  "isPublished": true,
+  "displayOrder": 0
+}
+
+### Delete menu
+# DELETE {{baseUrl}}/api/v1/restaurants/{{restaurantId}}/menus/{{menuId}}
+
+### ========== Sections (auth) ==========
+GET {{baseUrl}}/api/v1/restaurants/{{restaurantId}}/menus/{{menuId}}/sections
+
+### Create section
+POST {{baseUrl}}/api/v1/restaurants/{{restaurantId}}/menus/{{menuId}}/sections
+Content-Type: application/json
+
+{
+  "name": "Starters",
+  "displayOrder": 0
+}
+
+### Update section (set @sectionId above)
+PATCH {{baseUrl}}/api/v1/restaurants/{{restaurantId}}/menus/{{menuId}}/sections/{{sectionId}}
+Content-Type: application/json
+
+{
+  "name": "Appetizers",
+  "displayOrder": 0
+}
+
+### Delete section
+# DELETE {{baseUrl}}/api/v1/restaurants/{{restaurantId}}/menus/{{menuId}}/sections/{{sectionId}}
+
+### ========== Dishes (auth) ==========
+GET {{baseUrl}}/api/v1/restaurants/{{restaurantId}}/menus/{{menuId}}/sections/{{sectionId}}/dishes
+
+### Create dish
+POST {{baseUrl}}/api/v1/restaurants/{{restaurantId}}/menus/{{menuId}}/sections/{{sectionId}}/dishes
+Content-Type: application/json
+
+{
+  "name": "Caesar Salad",
+  "description": "Romaine, parmesan, croutons",
+  "price": "9.99",
+  "isAvailable": true,
+  "displayOrder": 0
+}
+
+### Get one dish (set @dishId above)
+GET {{baseUrl}}/api/v1/restaurants/{{restaurantId}}/menus/{{menuId}}/sections/{{sectionId}}/dishes/{{dishId}}
+
+### Update dish
+PATCH {{baseUrl}}/api/v1/restaurants/{{restaurantId}}/menus/{{menuId}}/sections/{{sectionId}}/dishes/{{dishId}}
+Content-Type: application/json
+
+{
+  "name": "Classic Caesar",
+  "price": "10.50",
+  "isAvailable": true
+}
+
+### Delete dish
+# DELETE {{baseUrl}}/api/v1/restaurants/{{restaurantId}}/menus/{{menuId}}/sections/{{sectionId}}/dishes/{{dishId}}
+
+### ========== Dish ingredients (auth, use dish id and ingredient id) ==========
+GET {{baseUrl}}/api/v1/dishes/{{dishId}}/ingredients
+
+### Add ingredient to dish (set @ingredientId from GET /ingredients)
+POST {{baseUrl}}/api/v1/dishes/{{dishId}}/ingredients
+Content-Type: application/json
+
+{
+  "ingredientId": {{ingredientId}},
+  "isOptional": false,
+  "isHidden": false,
+  "displayOrder": 0
+}
+
+### Remove ingredient from dish (second id = ingredientId)
+# DELETE {{baseUrl}}/api/v1/dishes/{{dishId}}/ingredients/{{ingredientId}}

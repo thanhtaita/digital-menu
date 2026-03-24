@@ -5,20 +5,26 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "predev": "pnpm --filter @digital-menu/db build",
-    "dev": "tsx watch src/index.ts",
+    "predev": "pnpm --filter @digital-menu/db build && pnpm --filter @digital-menu/shared build",
+    "dev": "cross-env PORT=3002 tsx watch src/index.ts",
     "start": "node dist/index.js"
   },
   "dependencies": {
     "@digital-menu/db": "workspace:*",
     "@digital-menu/shared": "workspace:*",
-    "fastify": "^5.0.0",
+    "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^10.0.0",
+    "bcrypt": "^6.0.0",
+    "cookie": "^1.1.1",
     "drizzle-orm": "^0.38.0",
+    "fastify": "^5.0.0",
     "pg": "^8.11.5"
   },
   "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/cookie": "^1.0.0",
     "@types/node": "^22.0.0",
+    "cross-env": "^7.0.3",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0"
   }
