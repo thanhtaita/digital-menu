@@ -16,6 +16,8 @@ import {
 export const userRoleEnum = pgEnum("user_role", ["diner", "restaurant_admin", "superadmin"]);
 export const restrictionTypeEnum = pgEnum("restriction_type", ["allergy", "dislike", "diet"]);
 export const restrictionSeverityEnum = pgEnum("restriction_severity", ["block", "warn"]);
+/** Pending = submitted by a restaurant; approved = in the official dictionary search. */
+export const ingredientApprovalStatusEnum = pgEnum("ingredient_approval_status", ["pending", "approved"]);
 
 /**
  * Users and auth
@@ -124,7 +126,11 @@ export const ingredients = pgTable(
     foodCategory: text("food_category"),
     nutrients: jsonb("nutrients").$type<Record<string, unknown>>(),
     isCommonAllergen: boolean("is_common_allergen").notNull().default(false),
-    commonAllergenGroup: text("common_allergen_group")
+    commonAllergenGroup: text("common_allergen_group"),
+    approvalStatus: ingredientApprovalStatusEnum("approval_status").notNull().default("approved"),
+    requestedByRestaurantId: integer("requested_by_restaurant_id").references(() => restaurants.id, {
+      onDelete: "set null"
+    })
   },
   (table) => ({
     canonicalNameIdx: uniqueIndex("ingredients_canonical_name_unique").on(table.canonicalName),

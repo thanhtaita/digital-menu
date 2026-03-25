@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Role } from "@digital-menu/shared";
+import type { CreateIngredientInput, RequestIngredientInput, Role } from "@digital-menu/shared";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3002/api/v1";
 
@@ -119,9 +119,29 @@ export type Dish = z.infer<typeof dishSchema>;
 const ingredientSchema = z.object({
   id: z.number(),
   canonicalName: z.string(),
-  slug: z.string()
+  slug: z.string(),
+  description: z.string().nullable().optional(),
+  imageUrl: z.string().nullable().optional(),
+  fdcId: z.number().nullable().optional(),
+  foodCategory: z.string().nullable().optional(),
+  nutrients: z.unknown().nullable().optional(),
+  isCommonAllergen: z.boolean(),
+  commonAllergenGroup: z.string().nullable().optional(),
+  approvalStatus: z.enum(["pending", "approved"]),
+  requestedByRestaurantId: z.number().nullable().optional()
 });
 export type Ingredient = z.infer<typeof ingredientSchema>;
+
+const pendingIngredientRowSchema = z.object({
+  id: z.number(),
+  canonicalName: z.string(),
+  slug: z.string(),
+  description: z.string().nullable().optional(),
+  approvalStatus: z.literal("pending"),
+  requestedByRestaurantId: z.number().nullable(),
+  restaurantName: z.string().nullable().optional()
+});
+export type PendingIngredientRow = z.infer<typeof pendingIngredientRowSchema>;
 
 const dishIngredientSchema = z.object({
   id: z.number(),
@@ -202,6 +222,36 @@ export async function apiSearchIngredients(q: string): Promise<Ingredient[]> {
     method: "GET"
   });
   return z.array(ingredientSchema).parse(data);
+}
+
+export async function apiCreateIngredient(input: CreateIngredientInput): Promise<Ingredient> {
+  const data = await request<unknown>("/ingredients", {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+  return ingredientSchema.parse(data);
+}
+
+export async function apiRequestIngredient(input: RequestIngredientInput): Promise<Ingredient> {
+  const data = await request<unknown>("/ingredients", {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+  return ingredientSchema.parse(data);
+}
+
+export async function apiListPendingIngredients(): Promise<PendingIngredientRow[]> {
+  const data = await request<unknown[]>("/ingredients/pending", { method: "GET" });
+  return z.array(pendingIngredientRowSchema).parse(data);
+}
+
+export async function apiApproveIngredient(id: number): Promise<Ingredient> {
+  const data = await request<unknown>(`/ingredients/${id}/approve`, { method: "POST", body: "{}" });
+  return ingredientSchema.parse(data);
+}
+
+export async function apiRejectIngredient(id: number): Promise<void> {
+  await request<void>(`/ingredients/${id}`, { method: "DELETE" });
 }
 
 export async function apiListDishIngredients(dishId: number): Promise<DishIngredient[]> {

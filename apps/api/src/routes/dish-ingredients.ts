@@ -63,6 +63,17 @@ export async function dishIngredientRoutes(app: FastifyInstance) {
     const maxOrder = existingLinks.length > 0 ? Math.max(...existingLinks.map((r) => r.displayOrder)) + 1 : 0;
     const [ingredient] = await db.select().from(ingredients).where(eq(ingredients.id, parsed.data.ingredientId)).limit(1);
     if (!ingredient) return reply.status(404).send({ error: "Ingredient not found" });
+    if (ingredient.approvalStatus === "pending") {
+      if (ingredient.requestedByRestaurantId == null) {
+        return reply.status(403).send({ error: "Ingredient not approved yet", code: "INGREDIENT_PENDING" });
+      }
+      if (ingredient.requestedByRestaurantId !== restaurantId) {
+        return reply.status(403).send({
+          error: "This ingredient is pending for another restaurant",
+          code: "PENDING_INGREDIENT_WRONG_RESTAURANT"
+        });
+      }
+    }
     const [link] = await db
       .insert(dishIngredients)
       .values({

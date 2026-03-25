@@ -241,7 +241,9 @@ async function seed() {
         slug: row.slug,
         description: row.description,
         isCommonAllergen: row.isCommonAllergen,
-        commonAllergenGroup: row.commonAllergenGroup
+        commonAllergenGroup: row.commonAllergenGroup,
+        approvalStatus: "approved",
+        requestedByRestaurantId: null
       } as NewIngredient)
       .onConflictDoUpdate({
         target: ingredients.canonicalName,
@@ -249,7 +251,9 @@ async function seed() {
           slug: row.slug,
           description: row.description,
           isCommonAllergen: row.isCommonAllergen,
-          commonAllergenGroup: row.commonAllergenGroup
+          commonAllergenGroup: row.commonAllergenGroup,
+          approvalStatus: "approved",
+          requestedByRestaurantId: null
         }
       })
       .returning({ id: ingredients.id });

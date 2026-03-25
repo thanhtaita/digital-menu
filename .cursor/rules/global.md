@@ -101,7 +101,15 @@ When in doubt, follow patterns already used in these folders before inventing ne
 
 ---
 
-#### 8. Plan- and role-aware behavior
+#### 8. Route documentation (`IMPLEMENTED_ROUTES.md`)
+
+- The **canonical list** of implemented HTTP API routes and admin-portal (and diner-app, when applicable) **page routes** lives in **`IMPLEMENTED_ROUTES.md`** at the repo root.
+- Whenever you **add**, **remove**, or **meaningfully change** a route—e.g. new Fastify handler (`apps/api`), new React Router path, changed method or prefix—**update `IMPLEMENTED_ROUTES.md` in the same change** (or immediately after), using the same format as existing entries (method + path, short notes on auth or query params).
+- Do not leave the catalog outdated after implementing routes; treat it as part of the definition of done for route work.
+
+---
+
+#### 9. Plan- and role-aware behavior
 
 - When the user references a **feature plan**:
   - Obey the current step and do not jump ahead unless explicitly instructed.

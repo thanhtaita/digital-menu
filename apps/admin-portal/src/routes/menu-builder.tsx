@@ -11,6 +11,7 @@ import {
   apiListMenus,
   apiListSections,
   apiRemoveDishIngredient,
+  apiRequestIngredient,
   apiSearchIngredients,
   type Dish
 } from "../lib/api-client";
@@ -38,6 +39,8 @@ export function MenuBuilderPage() {
   const [selectedSectionId, setSelectedSectionId] = useState<number | null>(null);
   const [selectedDishId, setSelectedDishId] = useState<number | null>(null);
   const [ingredientQuery, setIngredientQuery] = useState("");
+  const [requestIngredientName, setRequestIngredientName] = useState("");
+  const [requestIngredientError, setRequestIngredientError] = useState<string | null>(null);
 
   const menusQ = useQuery({
     queryKey: ["menus", restaurantId],
@@ -104,6 +107,31 @@ export function MenuBuilderPage() {
     mutationFn: (ingredientId: number) => apiAddDishIngredient(selectedDishId!, { ingredientId }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["dish-ingredients", selectedDishId] });
+    }
+  });
+
+  const requestIngredientM = useMutation({
+    mutationFn: () =>
+      apiRequestIngredient({
+        canonicalName: requestIngredientName.trim(),
+        restaurantId
+      }),
+    onSuccess: async () => {
+      setRequestIngredientName("");
+      setRequestIngredientError(null);
+      await queryClient.invalidateQueries({ queryKey: ["ingredients-search"] });
+    },
+    onError: (err: unknown) => {
+      const e = err as { status?: number; data?: { error?: string } };
+      if (e?.status === 409) {
+        setRequestIngredientError("That name is already in the dictionary or pending.");
+        return;
+      }
+      if (e?.status === 403) {
+        setRequestIngredientError("You cannot request ingredients for this restaurant.");
+        return;
+      }
+      setRequestIngredientError(e?.data?.error ?? "Request failed.");
     }
   });
 
@@ -242,6 +270,38 @@ export function MenuBuilderPage() {
           <CardTitle>Tag ingredients {selectedDish ? `for ${selectedDish.name}` : ""}</CardTitle>
         </CardHeader>
         <CardContent>
+          {Number.isFinite(restaurantId) && restaurantId > 0 && (
+            <div className="mb-4 rounded border border-dashed border-slate-300 bg-slate-50/80 p-3">
+              <p className="text-xs font-medium text-slate-800">Request a new ingredient</p>
+              <p className="mb-2 text-xs text-muted-foreground">
+                Adds a pending entry. It does not appear in the global dictionary until a platform admin approves. Until
+                then, only this restaurant can search and tag it.
+              </p>
+              <form
+                className="flex flex-wrap items-end gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setRequestIngredientError(null);
+                  if (!requestIngredientName.trim()) return;
+                  requestIngredientM.mutate();
+                }}
+              >
+                <Input
+                  className="max-w-xs flex-1"
+                  value={requestIngredientName}
+                  onChange={(e) => setRequestIngredientName(e.target.value)}
+                  placeholder="e.g. Urfa pepper"
+                  autoComplete="off"
+                />
+                <Button type="submit" disabled={requestIngredientM.isPending || !requestIngredientName.trim()}>
+                  {requestIngredientM.isPending ? "Submitting…" : "Submit request"}
+                </Button>
+              </form>
+              {requestIngredientError && (
+                <p className="mt-2 text-xs text-red-600">{requestIngredientError}</p>
+              )}
+            </div>
+          )}
           <Input
             value={ingredientQuery}
             onChange={(e) => setIngredientQuery(e.target.value)}
@@ -271,6 +331,9 @@ export function MenuBuilderPage() {
                     className="block w-full rounded border px-2 py-1 text-left text-xs hover:bg-slate-100"
                   >
                     {ingredient.canonicalName}
+                    {ingredient.approvalStatus === "pending" && (
+                      <span className="text-amber-800"> — pending approval</span>
+                    )}
                   </button>
                 ))}
               </div>

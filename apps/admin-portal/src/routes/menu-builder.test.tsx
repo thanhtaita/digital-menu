@@ -21,6 +21,7 @@ vi.mock("../lib/api-client", () => ({
   apiListDishes: vi.fn(),
   apiCreateDish: vi.fn(),
   apiSearchIngredients: vi.fn(),
+  apiRequestIngredient: vi.fn(),
   apiListDishIngredients: vi.fn(),
   apiAddDishIngredient: vi.fn(),
   apiRemoveDishIngredient: vi.fn()
@@ -49,7 +50,14 @@ describe("MenuBuilderPage", () => {
     ]);
     (apiListDishIngredients as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (apiSearchIngredients as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { id: 11, canonicalName: "Garlic", slug: "garlic" }
+      {
+        id: 11,
+        canonicalName: "Garlic",
+        slug: "garlic",
+        isCommonAllergen: false,
+        approvalStatus: "approved",
+        requestedByRestaurantId: null
+      }
     ]);
     (apiAddDishIngredient as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: 99,

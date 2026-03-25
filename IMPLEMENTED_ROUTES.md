@@ -16,8 +16,11 @@ Base URL: `http://localhost:3002/api/v1`
 - `GET /auth/me`
 
 ### Ingredients (`/ingredients`)
-- `GET /ingredients`
-- `GET /ingredients?q=<term>`
+- `GET /ingredients` — `GET /ingredients?q=<term>` — dictionary search: **approved** ingredients only when unauthenticated; when logged in, also includes **pending** ingredients requested by restaurants you manage (owner or `restaurant_admins`).
+- `GET /ingredients/pending` — list all pending requests (**superadmin only**); includes requesting restaurant name when set.
+- `POST /ingredients` — **Superadmin:** body `createIngredientSchema` → creates **approved** entry immediately. **Restaurant admin:** body `requestIngredientSchema` (`canonicalName`, `restaurantId`, optional `slug` / `description`) → creates **pending** entry for that restaurant (`403` if you do not manage the restaurant). Diners: `403`.
+- `POST /ingredients/:id/approve` — set ingredient to **approved** (**superadmin only**).
+- `DELETE /ingredients/:id` — reject a **pending** ingredient (**superadmin only**); `409` if still linked to dishes.
 
 ### Restaurants (`/restaurants`)
 - `GET /restaurants`
@@ -60,6 +63,7 @@ Base URL (dev): `http://localhost:5173`
 - `/register`
 - `/app/restaurants`
 - `/app/restaurants/:restaurantId/builder`
+- `/app/meta/ingredients` — approve/reject pending requests and add official dictionary entries (**superadmin only**; other roles are redirected away)
 
 Route fallback behavior:
 - Unauthenticated users are redirected to `/login`.
@@ -76,4 +80,9 @@ Route fallback behavior:
 5. Create menu -> section -> dish
 6. Search ingredient and tag it to the selected dish
 7. Verify tagged ingredient appears and can be removed
+8. **Superadmin / meta owner:** Set a user’s `role` to `superadmin` in the `users` table (there is no self-service UI for this). Log in as that user, open **Ingredient catalog**, add a canonical ingredient, and confirm it appears in the menu builder search.
+
+9. **Apply DB migration** `0002_ingredient_approval` (`pnpm --filter @digital-menu/db drizzle:migrate`) then run seed if needed.
+
+10. **Restaurant request flow:** As a restaurant admin, open **Menu builder**, use **Request a new ingredient**, confirm it appears in search with “pending approval” only for that restaurant, tag a dish, then as superadmin approve it in **Ingredient catalog** and confirm it appears for everyone without the pending label.
 

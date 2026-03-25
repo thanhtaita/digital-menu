@@ -76,6 +76,7 @@ digital-menu/
 ├── turbo.json
 ├── .env.example
 ├── TECH_PLAN.md                    ← this file
+├── IMPLEMENTED_ROUTES.md           ← keep in sync: list every implemented API + admin route
 │
 ├── apps/
 │   ├── admin-portal/               # Vite + React (existing empty dir)
@@ -220,7 +221,11 @@ Diner scans QR → /r/[slug] server renders full menu (one API call)
 - **Security:** Better Auth sessions (HTTP-only cookies), role-guard middleware on all write routes, Zod input validation, rate limiting on search endpoints
 - **Performance:** Next.js server components for initial menu render (no client-side loading spinner on QR scan), `pg_trgm` GIN indexes for sub-50ms ingredient search, Turborepo build cache
 - **Data isolation:** Dish ingredients belong to the restaurant's dish instance — same dish name can have different ingredients at different restaurants (enforced by `dish_ingredients` pointing to `dish_id` not a canonical dish)
-- **Ingredient dictionary:** Canonical ingredients are managed by superadmin — restaurant admins can only tag from the dictionary, not create new canonical ingredients
+- **Ingredient dictionary:** Approved entries are the global dictionary. Restaurant admins may **request** new names (pending until superadmin approves); pending rows are excluded from other restaurants’ search until approved.
+
+### Documentation workflow
+
+- Whenever you implement or change an HTTP route in `apps/api` or a user-facing route in the admin portal, update `IMPLEMENTED_ROUTES.md` in the same change (or immediately after). This file is the canonical list of what exists today; `TECH_PLAN.md` stays high-level and does not duplicate every path.
 
 ---
 
