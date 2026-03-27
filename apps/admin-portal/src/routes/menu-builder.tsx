@@ -10,6 +10,7 @@ import {
   apiListDishes,
   apiListMenus,
   apiListSections,
+  apiUpdateMenu,
   apiRemoveDishIngredient,
   apiRequestIngredient,
   apiSearchIngredients,
@@ -76,6 +77,16 @@ export function MenuBuilderPage() {
     mutationFn: () => apiCreateMenu(restaurantId, { name: menuName }),
     onSuccess: async () => {
       setMenuName("");
+      await queryClient.invalidateQueries({ queryKey: ["menus", restaurantId] });
+    }
+  });
+
+  const updateMenuM = useMutation({
+    mutationFn: (input: { isPublished: boolean }) => {
+      if (selectedMenuId == null) throw new Error("No menu selected");
+      return apiUpdateMenu(restaurantId, selectedMenuId, input);
+    },
+    onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["menus", restaurantId] });
     }
   });
@@ -147,6 +158,11 @@ export function MenuBuilderPage() {
     [dishesQ.data, selectedDishId]
   );
 
+  const selectedMenu = useMemo(
+    () => menusQ.data?.find((m) => m.id === selectedMenuId),
+    [menusQ.data, selectedMenuId]
+  );
+
   if (!Number.isFinite(restaurantId)) {
     return <p className="text-sm text-red-600">Invalid restaurant id.</p>;
   }
@@ -194,9 +210,54 @@ export function MenuBuilderPage() {
                 className={`rounded border px-2 py-1 text-xs ${selectedMenuId === menu.id ? "bg-slate-900 text-white" : "bg-white"}`}
               >
                 {menu.name}
+                {menu.isPublished ? (
+                  <span
+                    className={`ml-0.5 ${selectedMenuId === menu.id ? "text-emerald-300" : "text-emerald-600"}`}
+                    title="Published"
+                  >
+                    ●
+                  </span>
+                ) : null}
               </button>
             ))}
           </div>
+          {selectedMenu && (
+            <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-slate-200 pt-3">
+              <p className="text-xs text-slate-600">
+                <span className="text-slate-500">Public status:</span>{" "}
+                <span
+                  className={
+                    selectedMenu.isPublished ? "font-medium text-emerald-700" : "font-medium text-amber-800"
+                  }
+                >
+                  {selectedMenu.isPublished ? "Published" : "Draft"}
+                </span>
+                {selectedMenu.isPublished ? (
+                  <span className="text-slate-500"> — shown on the diner menu</span>
+                ) : null}
+              </p>
+              {!selectedMenu.isPublished ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => updateMenuM.mutate({ isPublished: true })}
+                  disabled={updateMenuM.isPending}
+                >
+                  {updateMenuM.isPending ? "Publishing…" : "Publish menu"}
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => updateMenuM.mutate({ isPublished: false })}
+                  disabled={updateMenuM.isPending}
+                >
+                  {updateMenuM.isPending ? "Updating…" : "Unpublish"}
+                </Button>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 

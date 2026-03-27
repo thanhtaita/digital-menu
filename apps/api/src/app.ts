@@ -9,6 +9,7 @@ import { menuRoutes } from "./routes/menus.js";
 import { sectionRoutes } from "./routes/sections.js";
 import { dishRoutes } from "./routes/dishes.js";
 import { dishIngredientRoutes } from "./routes/dish-ingredients.js";
+import { publicMenuRoutes } from "./routes/public-menu.js";
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
@@ -26,6 +27,7 @@ export async function buildApp() {
     prefix: "/api/v1/restaurants/:restaurantId/menus/:menuId/sections/:sectionId/dishes"
   });
   await app.register(dishIngredientRoutes, { prefix: "/api/v1/dishes/:dishId/ingredients" });
+  await app.register(publicMenuRoutes, { prefix: "/api/v1/public" });
 
   return app;
 }

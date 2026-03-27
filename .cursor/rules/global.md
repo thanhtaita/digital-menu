@@ -101,8 +101,9 @@ When in doubt, follow patterns already used in these folders before inventing ne
 
 ---
 
-#### 8. Route documentation (`IMPLEMENTED_ROUTES.md`)
+#### 8. Route documentation (`IMPLEMENTED_ROUTES.md`) & progress (`PROGRESS.md`)
 
+- **`PROGRESS.md`** (repo root) summarizes **what is done vs next** against `TECH_PLAN.md`. Update it when you complete a plan milestone or change priorities; use it with `TECH_PLAN.md` for sequencing work.
 - The **canonical list** of implemented HTTP API routes and admin-portal (and diner-app, when applicable) **page routes** lives in **`IMPLEMENTED_ROUTES.md`** at the repo root.
 - Whenever you **add**, **remove**, or **meaningfully change** a route—e.g. new Fastify handler (`apps/api`), new React Router path, changed method or prefix—**update `IMPLEMENTED_ROUTES.md` in the same change** (or immediately after), using the same format as existing entries (method + path, short notes on auth or query params).
 - Do not leave the catalog outdated after implementing routes; treat it as part of the definition of done for route work.

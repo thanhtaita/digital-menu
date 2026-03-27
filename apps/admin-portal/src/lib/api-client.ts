@@ -168,6 +168,18 @@ export async function apiCreateMenu(restaurantId: number, input: { name: string;
   return menuSchema.parse(data);
 }
 
+export async function apiUpdateMenu(
+  restaurantId: number,
+  menuId: number,
+  input: { name?: string; isPublished?: boolean; displayOrder?: number }
+) {
+  const data = await request<unknown>(`/restaurants/${restaurantId}/menus/${menuId}`, {
+    method: "PATCH",
+    body: JSON.stringify(input)
+  });
+  return menuSchema.parse(data);
+}
+
 export async function apiListSections(restaurantId: number, menuId: number): Promise<Section[]> {
   const data = await request<unknown[]>(
     `/restaurants/${restaurantId}/menus/${menuId}/sections`,

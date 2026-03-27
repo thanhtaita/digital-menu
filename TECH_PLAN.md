@@ -76,6 +76,7 @@ digital-menu/
 ├── turbo.json
 ├── .env.example
 ├── TECH_PLAN.md                    ← this file
+├── PROGRESS.md                     ← done vs next vs plan (update when milestones ship)
 ├── IMPLEMENTED_ROUTES.md           ← keep in sync: list every implemented API + admin route
 │
 ├── apps/

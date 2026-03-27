@@ -53,6 +53,9 @@ Base URL: `http://localhost:3002/api/v1`
 - `POST /dishes/:dishId/ingredients`
 - `DELETE /dishes/:dishId/ingredients/:ingredientId`
 
+### Public (no auth)
+- `GET /public/restaurants/:slug/menu` — **Published** menus only (`is_published`), **active** restaurants (`is_active`). Nested menus → sections → dishes → ingredients (non-`is_hidden` links). Ingredients: **approved** globally, or **pending** when `requested_by_restaurant_id` matches that restaurant. Response shape: `publicMenuResponseSchema` in `@digital-menu/shared`.
+
 ---
 
 ## Admin Portal Routes
@@ -71,6 +74,15 @@ Route fallback behavior:
 
 ---
 
+## Diner app (Next.js)
+
+Base URL (dev): `http://localhost:3003`
+
+- `/` — minimal landing (points to `/r/[slug]` pattern).
+- `/r/[slug]` — server-rendered public menu for restaurant `slug`; ingredient names link to `?i=<ingredient-slug>` and open a detail modal (native `<dialog>`).
+
+---
+
 ## Quick Manual QA Flow
 
 1. Start API: `pnpm --filter @digital-menu/api dev`
@@ -85,4 +97,6 @@ Route fallback behavior:
 9. **Apply DB migration** `0002_ingredient_approval` (`pnpm --filter @digital-menu/db drizzle:migrate`) then run seed if needed.
 
 10. **Restaurant request flow:** As a restaurant admin, open **Menu builder**, use **Request a new ingredient**, confirm it appears in search with “pending approval” only for that restaurant, tag a dish, then as superadmin approve it in **Ingredient catalog** and confirm it appears for everyone without the pending label.
+
+11. **Public menu + diner:** Publish a menu (`is_published`), start API (`pnpm --filter @digital-menu/api dev`) and diner app (`pnpm --filter @digital-menu/diner-app dev`). Open `http://localhost:3003/r/<restaurant-slug>`, confirm dishes and ingredient links; click an ingredient and confirm the modal opens (`?i=` in URL). Compare with `GET http://localhost:3002/api/v1/public/restaurants/<slug>/menu`.
 

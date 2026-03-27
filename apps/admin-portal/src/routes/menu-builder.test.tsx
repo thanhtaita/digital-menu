@@ -16,6 +16,7 @@ import {
 vi.mock("../lib/api-client", () => ({
   apiListMenus: vi.fn(),
   apiCreateMenu: vi.fn(),
+  apiUpdateMenu: vi.fn(),
   apiListSections: vi.fn(),
   apiCreateSection: vi.fn(),
   apiListDishes: vi.fn(),
