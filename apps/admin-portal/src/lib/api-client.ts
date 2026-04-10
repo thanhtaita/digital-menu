@@ -13,11 +13,13 @@ const userSchema = z.object({
 export type CurrentUser = z.infer<typeof userSchema>;
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const hasBody = options.body !== undefined && options.body !== null;
+  const body = options.body;
+  const hasBody = body !== undefined && body !== null;
+  const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
   const res = await fetch(`${API_BASE}${path}`, {
     credentials: "include",
     headers: {
-      ...(hasBody ? { "Content-Type": "application/json" } : {}),
+      ...(hasBody && !isFormData ? { "Content-Type": "application/json" } : {}),
       ...(options.headers ?? {})
     },
     ...options
@@ -104,6 +106,14 @@ const sectionSchema = z.object({
 });
 export type Section = z.infer<typeof sectionSchema>;
 
+const dishMediaSchema = z.object({
+  id: z.number(),
+  url: z.string(),
+  kind: z.enum(["image", "video"]),
+  displayOrder: z.number()
+});
+export type DishMedia = z.infer<typeof dishMediaSchema>;
+
 const dishSchema = z.object({
   id: z.number(),
   sectionId: z.number(),
@@ -112,9 +122,18 @@ const dishSchema = z.object({
   price: z.string(),
   imageUrl: z.string().nullable().optional(),
   isAvailable: z.boolean(),
-  displayOrder: z.number()
+  displayOrder: z.number(),
+  media: z.array(dishMediaSchema).optional()
 });
 export type Dish = z.infer<typeof dishSchema>;
+
+const ingredientMediaItemSchema = z.object({
+  id: z.number(),
+  url: z.string(),
+  kind: z.enum(["image", "video"]),
+  displayOrder: z.number()
+});
+export type IngredientMediaItem = z.infer<typeof ingredientMediaItemSchema>;
 
 const ingredientSchema = z.object({
   id: z.number(),
@@ -128,7 +147,8 @@ const ingredientSchema = z.object({
   isCommonAllergen: z.boolean(),
   commonAllergenGroup: z.string().nullable().optional(),
   approvalStatus: z.enum(["pending", "approved"]),
-  requestedByRestaurantId: z.number().nullable().optional()
+  requestedByRestaurantId: z.number().nullable().optional(),
+  media: z.array(ingredientMediaItemSchema).optional()
 });
 export type Ingredient = z.infer<typeof ingredientSchema>;
 
@@ -216,7 +236,14 @@ export async function apiCreateDish(
   restaurantId: number,
   menuId: number,
   sectionId: number,
-  input: { name: string; description?: string; price: string; isAvailable?: boolean; displayOrder?: number }
+  input: {
+    name: string;
+    description?: string;
+    price: string;
+    imageUrl?: string;
+    isAvailable?: boolean;
+    displayOrder?: number;
+  }
 ) {
   const data = await request<unknown>(
     `/restaurants/${restaurantId}/menus/${menuId}/sections/${sectionId}/dishes`,
@@ -226,6 +253,120 @@ export async function apiCreateDish(
     }
   );
   return dishSchema.parse(data);
+}
+
+const dishImageUploadResponseSchema = z.object({
+  imageUrl: z.string(),
+  dish: dishSchema
+});
+
+export async function apiUploadDishImage(
+  restaurantId: number,
+  menuId: number,
+  sectionId: number,
+  dishId: number,
+  file: File
+) {
+  const form = new FormData();
+  form.append("file", file);
+  const data = await request<unknown>(
+    `/restaurants/${restaurantId}/menus/${menuId}/sections/${sectionId}/dishes/${dishId}/image`,
+    { method: "POST", body: form }
+  );
+  return dishImageUploadResponseSchema.parse(data);
+}
+
+const dishMediaUploadResponseSchema = z.object({
+  media: dishMediaSchema
+});
+
+export async function apiUploadDishMedia(
+  restaurantId: number,
+  menuId: number,
+  sectionId: number,
+  dishId: number,
+  file: File
+) {
+  const form = new FormData();
+  form.append("file", file);
+  const data = await request<unknown>(
+    `/restaurants/${restaurantId}/menus/${menuId}/sections/${sectionId}/dishes/${dishId}/media`,
+    { method: "POST", body: form }
+  );
+  return dishMediaUploadResponseSchema.parse(data);
+}
+
+export async function apiDeleteDishMedia(
+  restaurantId: number,
+  menuId: number,
+  sectionId: number,
+  dishId: number,
+  mediaId: number
+) {
+  await request<void>(
+    `/restaurants/${restaurantId}/menus/${menuId}/sections/${sectionId}/dishes/${dishId}/media/${mediaId}`,
+    { method: "DELETE" }
+  );
+}
+
+const dishMediaReorderResponseSchema = z.object({
+  media: z.array(dishMediaSchema)
+});
+
+export async function apiReorderDishMedia(
+  restaurantId: number,
+  menuId: number,
+  sectionId: number,
+  dishId: number,
+  orderedIds: number[]
+) {
+  const data = await request<unknown>(
+    `/restaurants/${restaurantId}/menus/${menuId}/sections/${sectionId}/dishes/${dishId}/media/order`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ orderedIds })
+    }
+  );
+  return dishMediaReorderResponseSchema.parse(data);
+}
+
+const ingredientImageUploadResponseSchema = z.object({
+  imageUrl: z.string(),
+  ingredient: ingredientSchema
+});
+
+export async function apiUploadIngredientImage(ingredientId: number, file: File) {
+  const form = new FormData();
+  form.append("file", file);
+  const data = await request<unknown>(`/ingredients/${ingredientId}/image`, { method: "POST", body: form });
+  return ingredientImageUploadResponseSchema.parse(data);
+}
+
+const ingredientMediaUploadResponseSchema = z.object({
+  media: ingredientMediaItemSchema
+});
+
+export async function apiUploadIngredientMedia(ingredientId: number, file: File) {
+  const form = new FormData();
+  form.append("file", file);
+  const data = await request<unknown>(`/ingredients/${ingredientId}/media`, { method: "POST", body: form });
+  return ingredientMediaUploadResponseSchema.parse(data);
+}
+
+export async function apiDeleteIngredientMedia(ingredientId: number, mediaId: number) {
+  await request<void>(`/ingredients/${ingredientId}/media/${mediaId}`, { method: "DELETE" });
+}
+
+const ingredientMediaReorderResponseSchema = z.object({
+  media: z.array(ingredientMediaItemSchema)
+});
+
+export async function apiReorderIngredientMedia(ingredientId: number, orderedIds: number[]) {
+  const data = await request<unknown>(`/ingredients/${ingredientId}/media/order`, {
+    method: "PATCH",
+    body: JSON.stringify({ orderedIds })
+  });
+  return ingredientMediaReorderResponseSchema.parse(data);
 }
 
 export async function apiSearchIngredients(q: string): Promise<Ingredient[]> {
@@ -286,3 +427,48 @@ export async function apiRemoveDishIngredient(dishId: number, ingredientId: numb
   await request<void>(`/dishes/${dishId}/ingredients/${ingredientId}`, { method: "DELETE" });
 }
 
+export async function apiUpdateDish(
+  restaurantId: number,
+  menuId: number,
+  sectionId: number,
+  dishId: number,
+  input: {
+    name?: string;
+    description?: string | null;
+    price?: string;
+    imageUrl?: string;
+    isAvailable?: boolean;
+    displayOrder?: number;
+  }
+) {
+  const data = await request<unknown>(
+    `/restaurants/${restaurantId}/menus/${menuId}/sections/${sectionId}/dishes/${dishId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(input)
+    }
+  );
+  return dishSchema.parse(data);
+}
+
+export async function apiDeleteDish(
+  restaurantId: number,
+  menuId: number,
+  sectionId: number,
+  dishId: number
+) {
+  await request<void>(
+    `/restaurants/${restaurantId}/menus/${menuId}/sections/${sectionId}/dishes/${dishId}`,
+    { method: "DELETE" }
+  );
+}
+
+export async function apiDeleteMenu(restaurantId: number, menuId: number) {
+  await request<void>(`/restaurants/${restaurantId}/menus/${menuId}`, { method: "DELETE" });
+}
+
+export async function apiDeleteSection(restaurantId: number, menuId: number, sectionId: number) {
+  await request<void>(`/restaurants/${restaurantId}/menus/${menuId}/sections/${sectionId}`, {
+    method: "DELETE"
+  });
+}
