@@ -2,20 +2,155 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── Design-system tokens (Editorial theme — default) ─────────────────────── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --paper: oklch(0.97 0.008 80);
+  --paperAlt: oklch(0.94 0.012 75);
+  --ink: oklch(0.18 0.01 60);
+  --inkMuted: oklch(0.45 0.01 60);
+  --inkFaint: oklch(0.62 0.008 60);
+  --rule: oklch(0.85 0.01 70);
+  --accent: oklch(0.52 0.18 25);
+  --accentInk: oklch(0.99 0.005 80);
+  --warn: oklch(0.58 0.19 30);
+  --displayWeight: 400;
+  --radius: 4px;
+  --cardRadius: 8px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* Font family vars — resolved from next/font variables set on <body> */
+body {
+  --display: var(--font-display, Georgia, serif);
+  --ui: var(--font-ui, system-ui, sans-serif);
+  --mono: var(--font-mono, ui-monospace, monospace);
+}
+
+/* ─── Base reset ────────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  color: var(--ink);
+  background: var(--paper);
+  font-family: var(--ui);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+button {
+  font: inherit;
+}
+
+/* ─── Ingredient bottom sheet (fixed overlay + panel, not <dialog>) ─────────── */
+.ingredient-sheet-root {
+  --sheet-height: 70vh;
+
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+  background: rgba(10, 8, 6, 0.42);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  color: var(--ink);
+}
+
+@media (max-width: 768px) {
+  .ingredient-sheet-root {
+    --sheet-height: 80vh;
   }
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+.ingredient-sheet-root .sheet-panel {
+  width: 100%;
+  max-width: 1024px;
+  height: var(--sheet-height);
+  min-height: var(--sheet-height);
+  max-height: var(--sheet-height);
+  border-top-left-radius: 13px;
+  border-top-right-radius: 13px;
+  box-shadow: 0 -20px 60px rgba(0, 0, 0, 0.18);
+  background: var(--paper);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: sheetSlideUp 320ms cubic-bezier(0.22, 0.8, 0.26, 1);
+}
+
+.ingredient-sheet-root .sheet-panel.sheet-panel--exiting {
+  animation: sheetSlideDown 320ms cubic-bezier(0.22, 0.8, 0.26, 1) forwards;
+}
+
+/* Ingredient sheet chrome: grab (phone/tablet) vs Close (desktop) */
+.sheet-chrome-mobile {
+  display: flex;
+  justify-content: center;
+  padding-top: 10px;
+  padding-bottom: 4px;
+  flex-shrink: 0;
+}
+
+.sheet-chrome-desktop {
+  display: none;
+  flex-shrink: 0;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 10px 16px 6px;
+}
+
+.sheet-close-btn {
+  all: unset;
+  cursor: pointer;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--inkFaint);
+  box-sizing: border-box;
+}
+
+@media (min-width: 1024px) {
+  .sheet-chrome-mobile {
+    display: none;
+  }
+
+  .sheet-chrome-desktop {
+    display: flex;
+  }
+}
+
+@keyframes sheetSlideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes sheetSlideDown {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
 }

@@ -1,5 +1,11 @@
 import { z } from "zod";
-import type { CreateIngredientInput, RequestIngredientInput, Role } from "@digital-menu/shared";
+import type {
+  CreateIngredientInput,
+  RequestIngredientInput,
+  UpdateIngredientInput,
+  UpsertTranslationInput,
+  Role
+} from "@digital-menu/shared";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3002/api/v1";
 
@@ -407,6 +413,18 @@ export async function apiRejectIngredient(id: number): Promise<void> {
   await request<void>(`/ingredients/${id}`, { method: "DELETE" });
 }
 
+export async function apiUpdateIngredient(id: number, input: UpdateIngredientInput): Promise<Ingredient> {
+  const data = await request<unknown>(`/ingredients/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(input)
+  });
+  return ingredientSchema.parse(data);
+}
+
+export async function apiDeleteIngredient(id: number): Promise<void> {
+  await request<void>(`/ingredients/${id}`, { method: "DELETE" });
+}
+
 export async function apiListDishIngredients(dishId: number): Promise<DishIngredient[]> {
   const data = await request<unknown[]>(`/dishes/${dishId}/ingredients`, { method: "GET" });
   return z.array(dishIngredientSchema).parse(data);
@@ -467,8 +485,113 @@ export async function apiDeleteMenu(restaurantId: number, menuId: number) {
   await request<void>(`/restaurants/${restaurantId}/menus/${menuId}`, { method: "DELETE" });
 }
 
+export async function apiUpdateSection(
+  restaurantId: number,
+  menuId: number,
+  sectionId: number,
+  input: { name?: string; displayOrder?: number }
+) {
+  const data = await request<unknown>(
+    `/restaurants/${restaurantId}/menus/${menuId}/sections/${sectionId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(input)
+    }
+  );
+  return sectionSchema.parse(data);
+}
+
 export async function apiDeleteSection(restaurantId: number, menuId: number, sectionId: number) {
   await request<void>(`/restaurants/${restaurantId}/menus/${menuId}/sections/${sectionId}`, {
     method: "DELETE"
   });
+}
+
+export async function apiUpdateRestaurant(
+  restaurantId: number,
+  input: { name?: string; slug?: string; description?: string | null }
+): Promise<Restaurant> {
+  const data = await request<unknown>(`/restaurants/${restaurantId}`, {
+    method: "PATCH",
+    body: JSON.stringify(input)
+  });
+  return restaurantSchema.parse(data);
+}
+
+// ── Translation helpers ───────────────────────────────────────────────────
+
+const translationRowSchema = z.object({
+  id: z.number(),
+  locale: z.string(),
+  name: z.string(),
+  description: z.string().nullable().optional()
+});
+
+export type TranslationRow = z.infer<typeof translationRowSchema>;
+
+// Dish translations
+
+export async function apiListDishTranslations(
+  restaurantId: number,
+  menuId: number,
+  sectionId: number,
+  dishId: number
+): Promise<TranslationRow[]> {
+  const data = await request<unknown[]>(
+    `/restaurants/${restaurantId}/menus/${menuId}/sections/${sectionId}/dishes/${dishId}/translations`,
+    { method: "GET" }
+  );
+  return z.array(translationRowSchema).parse(data);
+}
+
+export async function apiUpsertDishTranslation(
+  restaurantId: number,
+  menuId: number,
+  sectionId: number,
+  dishId: number,
+  input: UpsertTranslationInput
+): Promise<TranslationRow> {
+  const data = await request<unknown>(
+    `/restaurants/${restaurantId}/menus/${menuId}/sections/${sectionId}/dishes/${dishId}/translations/${encodeURIComponent(input.locale)}`,
+    { method: "PUT", body: JSON.stringify({ name: input.name, description: input.description }) }
+  );
+  return translationRowSchema.parse(data);
+}
+
+export async function apiDeleteDishTranslation(
+  restaurantId: number,
+  menuId: number,
+  sectionId: number,
+  dishId: number,
+  locale: string
+): Promise<void> {
+  await request<void>(
+    `/restaurants/${restaurantId}/menus/${menuId}/sections/${sectionId}/dishes/${dishId}/translations/${encodeURIComponent(locale)}`,
+    { method: "DELETE" }
+  );
+}
+
+// Ingredient translations
+
+export async function apiListIngredientTranslations(ingredientId: number): Promise<TranslationRow[]> {
+  const data = await request<unknown[]>(`/ingredients/${ingredientId}/translations`, { method: "GET" });
+  return z.array(translationRowSchema).parse(data);
+}
+
+export async function apiUpsertIngredientTranslation(
+  ingredientId: number,
+  input: UpsertTranslationInput
+): Promise<TranslationRow> {
+  const data = await request<unknown>(
+    `/ingredients/${ingredientId}/translations/${encodeURIComponent(input.locale)}`,
+    { method: "PUT", body: JSON.stringify({ name: input.name, description: input.description }) }
+  );
+  return translationRowSchema.parse(data);
+}
+
+export async function apiDeleteIngredientTranslation(ingredientId: number, locale: string): Promise<void> {
+  await request<void>(
+    `/ingredients/${ingredientId}/translations/${encodeURIComponent(locale)}`,
+    { method: "DELETE" }
+  );
 }

@@ -9,3 +9,6 @@ token.txt
 node_modules/
 dist/
 .turbo/
+
+# Local API uploads (dish/ingredient images)
+apps/api/uploads/

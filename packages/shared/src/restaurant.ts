@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { imageUrlFieldSchema } from "./image-url";
 
 export const createRestaurantSchema = z.object({
   name: z.string().min(1).max(200),
@@ -33,12 +34,20 @@ export const createDishSchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(2000).optional(),
   price: z.union([z.string().regex(/^\d+(\.\d{1,2})?$/), z.number().positive()]),
-  imageUrl: z.string().url().optional().or(z.literal("")).optional(),
+  imageUrl: imageUrlFieldSchema,
   isAvailable: z.boolean().optional(),
   displayOrder: z.number().int().min(0).optional()
 });
 
 export const updateDishSchema = createDishSchema.partial();
+
+export const reorderDishMediaSchema = z.object({
+  orderedIds: z.array(z.number().int().positive()).min(1)
+});
+
+export const reorderIngredientMediaSchema = z.object({
+  orderedIds: z.array(z.number().int().positive()).min(1)
+});
 
 export const addDishIngredientSchema = z.object({
   ingredientId: z.number().int().positive(),
@@ -55,4 +64,6 @@ export type CreateSectionInput = z.infer<typeof createSectionSchema>;
 export type UpdateSectionInput = z.infer<typeof updateSectionSchema>;
 export type CreateDishInput = z.infer<typeof createDishSchema>;
 export type UpdateDishInput = z.infer<typeof updateDishSchema>;
+export type ReorderDishMediaInput = z.infer<typeof reorderDishMediaSchema>;
+export type ReorderIngredientMediaInput = z.infer<typeof reorderIngredientMediaSchema>;
 export type AddDishIngredientInput = z.infer<typeof addDishIngredientSchema>;

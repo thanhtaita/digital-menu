@@ -14,16 +14,20 @@
     "@digital-menu/shared": "workspace:*",
     "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^10.0.0",
+    "@fastify/multipart": "^9.4.0",
+    "@fastify/static": "^9.0.0",
     "bcrypt": "^6.0.0",
     "cookie": "^1.1.1",
     "drizzle-orm": "^0.38.0",
     "fastify": "^5.0.0",
-    "pg": "^8.11.5"
+    "pg": "^8.11.5",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
     "@types/cookie": "^1.0.0",
     "@types/node": "^22.0.0",
+    "@types/qrcode": "^1.5.6",
     "cross-env": "^7.0.3",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0"

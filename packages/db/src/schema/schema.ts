@@ -18,6 +18,8 @@ export const restrictionTypeEnum = pgEnum("restriction_type", ["allergy", "disli
 export const restrictionSeverityEnum = pgEnum("restriction_severity", ["block", "warn"]);
 /** Pending = submitted by a restaurant; approved = in the official dictionary search. */
 export const ingredientApprovalStatusEnum = pgEnum("ingredient_approval_status", ["pending", "approved"]);
+/** Gallery item type for dish_media (images and videos). */
+export const dishMediaKindEnum = pgEnum("dish_media_kind", ["image", "video"]);
 
 /**
  * Users and auth
@@ -106,6 +108,23 @@ export const dishes = pgTable("dishes", {
   displayOrder: integer("display_order").notNull().default(0)
 });
 
+/** Ordered images and videos for a dish (public URLs: /uploads/... or https://). */
+export const dishMedia = pgTable(
+  "dish_media",
+  {
+    id: serial("id").primaryKey(),
+    dishId: integer("dish_id")
+      .notNull()
+      .references(() => dishes.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    kind: dishMediaKindEnum("kind").notNull(),
+    displayOrder: integer("display_order").notNull().default(0)
+  },
+  (table) => ({
+    dishIdIdx: index("dish_media_dish_id_idx").on(table.dishId)
+  })
+);
+
 /**
  * Ingredient knowledge layer (global catalog).
  * - ingredients: Canonical ingredients (FDC, nutrients, allergen flags). Referenced by ingredient_aliases, dish_ingredients, user_restrictions.
@@ -135,6 +154,23 @@ export const ingredients = pgTable(
   (table) => ({
     canonicalNameIdx: uniqueIndex("ingredients_canonical_name_unique").on(table.canonicalName),
     slugIdx: uniqueIndex("ingredients_slug_unique").on(table.slug)
+  })
+);
+
+/** Ordered images/videos for an ingredient (same URL semantics as dish_media). */
+export const ingredientMedia = pgTable(
+  "ingredient_media",
+  {
+    id: serial("id").primaryKey(),
+    ingredientId: integer("ingredient_id")
+      .notNull()
+      .references(() => ingredients.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    kind: dishMediaKindEnum("kind").notNull(),
+    displayOrder: integer("display_order").notNull().default(0)
+  },
+  (table) => ({
+    ingredientIdIdx: index("ingredient_media_ingredient_id_idx").on(table.ingredientId)
   })
 );
 
@@ -214,7 +250,56 @@ export const restaurantAdmins = pgTable(
   })
 );
 
+/**
+ * Translation tables
+ * - dish_translations: Per-locale name + description for a dish.
+ * - ingredient_translations: Per-locale name + description for an ingredient.
+ * The root table holds the default (source) language values as a fallback.
+ * Locale uses BCP-47 tags (e.g. "en", "fr", "vi", "zh-Hant").
+ */
+
+/** Translations for dish name and description, keyed by (dish_id, locale). */
+export const dishTranslations = pgTable(
+  "dish_translations",
+  {
+    id: serial("id").primaryKey(),
+    dishId: integer("dish_id")
+      .notNull()
+      .references(() => dishes.id, { onDelete: "cascade" }),
+    locale: text("locale").notNull(),
+    name: text("name").notNull(),
+    description: text("description")
+  },
+  (table) => ({
+    dishLocaleUnique: uniqueIndex("dish_translations_dish_id_locale_unique").on(table.dishId, table.locale),
+    dishIdIdx: index("dish_translations_dish_id_idx").on(table.dishId)
+  })
+);
+
+/** Translations for ingredient canonical name and description, keyed by (ingredient_id, locale). */
+export const ingredientTranslations = pgTable(
+  "ingredient_translations",
+  {
+    id: serial("id").primaryKey(),
+    ingredientId: integer("ingredient_id")
+      .notNull()
+      .references(() => ingredients.id, { onDelete: "cascade" }),
+    locale: text("locale").notNull(),
+    name: text("name").notNull(),
+    description: text("description")
+  },
+  (table) => ({
+    ingredientLocaleUnique: uniqueIndex("ingredient_translations_ingredient_id_locale_unique").on(
+      table.ingredientId,
+      table.locale
+    ),
+    ingredientIdIdx: index("ingredient_translations_ingredient_id_idx").on(table.ingredientId)
+  })
+);
+
 // Insert types for use in seed/API
 export type NewIngredient = typeof ingredients.$inferInsert;
 export type NewIngredientAlias = typeof ingredientAliases.$inferInsert;
+export type NewDishTranslation = typeof dishTranslations.$inferInsert;
+export type NewIngredientTranslation = typeof ingredientTranslations.$inferInsert;
 

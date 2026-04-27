@@ -7,11 +7,29 @@ import {
   menuSections,
   dishes,
   dishIngredients,
-  ingredients
+  ingredients,
+  dishMedia,
+  ingredientMedia
 } from "@digital-menu/db";
-import { publicMenuResponseSchema } from "@digital-menu/shared";
+import { publicMenuResponseSchema, publicRestaurantListResponseSchema } from "@digital-menu/shared";
 
 export async function publicMenuRoutes(app: FastifyInstance) {
+  app.get("/restaurants", async () => {
+    const rows = await db
+      .select({
+        id: restaurants.id,
+        name: restaurants.name,
+        slug: restaurants.slug,
+        description: restaurants.description,
+        logoUrl: restaurants.logoUrl
+      })
+      .from(restaurants)
+      .where(eq(restaurants.isActive, true))
+      .orderBy(asc(restaurants.name), asc(restaurants.id));
+
+    return publicRestaurantListResponseSchema.parse({ restaurants: rows });
+  });
+
   app.get<{ Params: { slug: string } }>("/restaurants/:slug/menu", async (request, reply) => {
     const slug = request.params.slug;
     const [restaurant] = await db
@@ -72,6 +90,22 @@ export async function publicMenuRoutes(app: FastifyInstance) {
       .orderBy(asc(dishes.displayOrder), asc(dishes.id));
 
     const dishIds = dishRows.map((d) => d.id);
+
+    const mediaRows =
+      dishIds.length === 0
+        ? []
+        : await db
+            .select()
+            .from(dishMedia)
+            .where(inArray(dishMedia.dishId, dishIds))
+            .orderBy(asc(dishMedia.displayOrder), asc(dishMedia.id));
+
+    const mediaByDish = new Map<number, (typeof mediaRows)[number][]>();
+    for (const row of mediaRows) {
+      const list = mediaByDish.get(row.dishId) ?? [];
+      list.push(row);
+      mediaByDish.set(row.dishId, list);
+    }
     const ingredientVisibility = or(
       eq(ingredients.approvalStatus, "approved"),
       and(eq(ingredients.approvalStatus, "pending"), eq(ingredients.requestedByRestaurantId, restaurant.id))
@@ -105,6 +139,23 @@ export async function publicMenuRoutes(app: FastifyInstance) {
             )
             .orderBy(asc(dishIngredients.displayOrder), asc(dishIngredients.id));
 
+    const uniqueIngredientIds = [...new Set(ingredientRows.map((r) => r.ingredientId))];
+    const ingredientMediaRows =
+      uniqueIngredientIds.length === 0
+        ? []
+        : await db
+            .select()
+            .from(ingredientMedia)
+            .where(inArray(ingredientMedia.ingredientId, uniqueIngredientIds))
+            .orderBy(asc(ingredientMedia.displayOrder), asc(ingredientMedia.id));
+
+    const ingredientMediaById = new Map<number, (typeof ingredientMediaRows)[number][]>();
+    for (const row of ingredientMediaRows) {
+      const list = ingredientMediaById.get(row.ingredientId) ?? [];
+      list.push(row);
+      ingredientMediaById.set(row.ingredientId, list);
+    }
+
     const ingredientsByDish = new Map<number, typeof ingredientRows>();
     for (const row of ingredientRows) {
       const list = ingredientsByDish.get(row.dishId) ?? [];
@@ -136,27 +187,49 @@ export async function publicMenuRoutes(app: FastifyInstance) {
           id: section.id,
           name: section.name,
           displayOrder: section.displayOrder,
-          dishes: (dishesBySection.get(section.id) ?? []).map((dish) => ({
+          dishes: (dishesBySection.get(section.id) ?? []).map((dish) => {
+            const media = (mediaByDish.get(dish.id) ?? []).map((m) => ({
+              id: m.id,
+              url: m.url,
+              kind: m.kind,
+              displayOrder: m.displayOrder
+            }));
+            const firstImage = media.find((m) => m.kind === "image");
+            const derivedImageUrl = firstImage?.url ?? dish.imageUrl;
+            return {
             id: dish.id,
             name: dish.name,
             description: dish.description,
             price: String(dish.price),
-            imageUrl: dish.imageUrl,
+            imageUrl: derivedImageUrl,
             isAvailable: dish.isAvailable,
             displayOrder: dish.displayOrder,
-            ingredients: (ingredientsByDish.get(dish.id) ?? []).map((ing) => ({
-              id: ing.linkId,
-              ingredientId: ing.ingredientId,
-              canonicalName: ing.canonicalName,
-              slug: ing.slug,
-              description: ing.description,
-              imageUrl: ing.imageUrl,
-              nutrients: ing.nutrients ?? null,
-              isCommonAllergen: ing.isCommonAllergen,
-              commonAllergenGroup: ing.commonAllergenGroup,
-              isOptional: ing.isOptional
-            }))
-          }))
+            media,
+            ingredients: (ingredientsByDish.get(dish.id) ?? []).map((ing) => {
+              const ingMedia = (ingredientMediaById.get(ing.ingredientId) ?? []).map((m) => ({
+                id: m.id,
+                url: m.url,
+                kind: m.kind,
+                displayOrder: m.displayOrder
+              }));
+              const firstIngImage = ingMedia.find((m) => m.kind === "image");
+              const derivedIngImageUrl = firstIngImage?.url ?? ing.imageUrl;
+              return {
+                id: ing.linkId,
+                ingredientId: ing.ingredientId,
+                canonicalName: ing.canonicalName,
+                slug: ing.slug,
+                description: ing.description,
+                imageUrl: derivedIngImageUrl,
+                media: ingMedia,
+                nutrients: ing.nutrients ?? null,
+                isCommonAllergen: ing.isCommonAllergen,
+                commonAllergenGroup: ing.commonAllergenGroup,
+                isOptional: ing.isOptional
+              };
+            })
+          };
+          })
         }))
       }))
     };

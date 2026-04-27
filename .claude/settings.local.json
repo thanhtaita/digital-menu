@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "Bash(pnpm run:*)",
+      "Bash(npx tsc:*)",
+      "Bash(node -e ':*)",
+      "Bash(pnpm --filter admin-portal run build)",
+      "Bash(npx vite:*)",
+      "Bash(pnpm --filter @digital-menu/db build)",
+      "Bash(pnpm:*)",
+      "Bash(psql \"postgres://postgres:123456@localhost:5433/digital_menu\" -c \"\\\\dt ingredient_translations\")"
+    ]
+  }
+}

@@ -22,6 +22,27 @@
       "when": 1773292400000,
       "tag": "0002_ingredient_approval",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1775343541361,
+      "tag": "0003_mixed_khan",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1775400000000,
+      "tag": "0004_ingredient_media",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1744416000000,
+      "tag": "0005_translations",
+      "breakpoints": true
     }
   ]
 }

@@ -7,9 +7,9 @@ These rules tell Cursor how to work in this repo so development stays fast, safe
 #### 1. Project overview
 
 - **Monorepo layout**
-  - `apps/api`: Fastify API server (TypeScript).
-  - `apps/admin-portal`: Vite + React admin SPA.
-  - `apps/diner-app`: Next.js 15 diner-facing app.
+  - `apps/api`: Fastify API server (TypeScript); **`FEATURES.md`** summarizes implemented API capabilities (keep in sync when behavior changes—see §8).
+  - `apps/admin-portal`: Vite + React admin SPA; **`FEATURES.md`** for admin UI capabilities (same rule).
+  - `apps/diner-app`: Next.js 15 diner-facing app; **`FEATURES.md`** for public diner experience (same rule).
   - `packages/db`: Drizzle ORM schema + migrations.
   - `packages/shared`: Shared Zod schemas + TypeScript types/enums.
   - `packages/seed`: Data ingestion / seeding scripts.
@@ -101,12 +101,20 @@ When in doubt, follow patterns already used in these folders before inventing ne
 
 ---
 
-#### 8. Route documentation (`IMPLEMENTED_ROUTES.md`) & progress (`PROGRESS.md`)
+#### 8. Documentation: routes, per-app features, progress
 
 - **`PROGRESS.md`** (repo root) summarizes **what is done vs next** against `TECH_PLAN.md`. Update it when you complete a plan milestone or change priorities; use it with `TECH_PLAN.md` for sequencing work.
 - The **canonical list** of implemented HTTP API routes and admin-portal (and diner-app, when applicable) **page routes** lives in **`IMPLEMENTED_ROUTES.md`** at the repo root.
 - Whenever you **add**, **remove**, or **meaningfully change** a route—e.g. new Fastify handler (`apps/api`), new React Router path, changed method or prefix—**update `IMPLEMENTED_ROUTES.md` in the same change** (or immediately after), using the same format as existing entries (method + path, short notes on auth or query params).
 - Do not leave the catalog outdated after implementing routes; treat it as part of the definition of done for route work.
+
+**Per-app feature summaries** (concise, human-readable behavior—not a duplicate of every path):
+
+- **`apps/api/FEATURES.md`** — Update when API **capabilities** change: new route groups, auth rules, upload behavior, public vs private behavior, etc.
+- **`apps/admin-portal/FEATURES.md`** — Update when the admin UI gains or loses **user-visible flows** (screens, CRUD, toggles, uploads, superadmin-only areas).
+- **`apps/diner-app/FEATURES.md`** — Update when the public diner experience changes (pages, menu layout, ingredient modal, discovery list, etc.).
+
+When you ship work that touches one of those apps, **update the matching `FEATURES.md` in the same change** (or immediately after): add/adjust/remove bullets so the file still matches reality. Keep entries short and outcome-focused (what users or integrators can do). Point to `IMPLEMENTED_ROUTES.md` for exact paths and to `PROGRESS.md` for planned gaps; do not let `FEATURES.md` drift after feature work.
 
 ---
 

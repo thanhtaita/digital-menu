@@ -1,0 +1,9 @@
+Diner accounts:
+jackson@gmail.com
+jackson123
+
+kalvin@gmail.com
+kalvin123
+
+owner@test.com
+password123

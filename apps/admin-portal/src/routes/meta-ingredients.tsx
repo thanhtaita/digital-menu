@@ -1,14 +1,38 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { ConfirmDialog } from "../components/confirm-dialog";
 import {
   apiApproveIngredient,
   apiCreateIngredient,
+  apiDeleteIngredient,
+  apiListIngredientTranslations,
+  apiUpsertIngredientTranslation,
+  apiDeleteIngredientTranslation,
   apiListPendingIngredients,
-  apiRejectIngredient
+  apiRejectIngredient,
+  apiUpdateIngredient,
+  apiUploadIngredientMedia,
+  apiDeleteIngredientMedia,
+  apiReorderIngredientMedia,
+  apiSearchIngredients,
+  type Ingredient,
+  type TranslationRow
 } from "../lib/api-client";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
+import { GALLERY_MEDIA_ACCEPT, GALLERY_MULTI_FILE_HINT } from "@/lib/upload-ui";
+
+const ADMIN_API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3002/api/v1";
+
+function resolveUploadAssetUrl(url: string): string {
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  try {
+    return `${new URL(ADMIN_API_BASE).origin}${url}`;
+  } catch {
+    return url;
+  }
+}
 
 export function MetaIngredientsPage() {
   const queryClient = useQueryClient();
@@ -18,10 +42,140 @@ export function MetaIngredientsPage() {
   const [isCommonAllergen, setIsCommonAllergen] = useState(false);
   const [commonAllergenGroup, setCommonAllergenGroup] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
+  const [createdIngredient, setCreatedIngredient] = useState<Ingredient | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    destructive?: boolean;
+    onConfirm: () => void;
+  } | null>(null);
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [editingIngredientId, setEditingIngredientId] = useState<number | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editIsAllergen, setEditIsAllergen] = useState(false);
+  const [editAllergenGroup, setEditAllergenGroup] = useState("");
+  const [editError, setEditError] = useState<string | null>(null);
+
+  // Ingredient media editing state
+  const [mediaIngredientId, setMediaIngredientId] = useState<number | null>(null);
+
+  // Ingredient translation state
+  const [translatingIngredientId, setTranslatingIngredientId] = useState<number | null>(null);
+  const [ingredientTranslations, setIngredientTranslations] = useState<TranslationRow[]>([]);
+  const [ingTranslationLocale, setIngTranslationLocale] = useState("");
+  const [ingTranslationName, setIngTranslationName] = useState("");
+  const [ingTranslationDescription, setIngTranslationDescription] = useState("");
+  const [ingTranslationError, setIngTranslationError] = useState<string | null>(null);
+  const [ingTranslationLoading, setIngTranslationLoading] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(searchQuery.trim()), 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    const first = photoFiles[0];
+    if (!first) {
+      setPhotoPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(first);
+    setPhotoPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [photoFiles]);
+
+  const createdIngredientMediaSorted = [...(createdIngredient?.media ?? [])].sort(
+    (a, b) => a.displayOrder - b.displayOrder || a.id - b.id
+  );
+
+  async function refreshCreatedIngredient(id: number, nameHint: string): Promise<Ingredient | null> {
+    const list = await apiSearchIngredients(nameHint);
+    return list.find((i) => i.id === id) ?? null;
+  }
 
   const pendingQ = useQuery({
     queryKey: ["ingredients-pending"],
     queryFn: apiListPendingIngredients
+  });
+
+  const searchQ = useQuery({
+    queryKey: ["ingredients-search-meta", debouncedQuery],
+    queryFn: () => apiSearchIngredients(debouncedQuery),
+    enabled: debouncedQuery.length >= 1
+  });
+
+  const updateIngredientM = useMutation({
+    mutationFn: ({ id, input }: { id: number; input: Parameters<typeof apiUpdateIngredient>[1] }) =>
+      apiUpdateIngredient(id, input),
+    onSuccess: async () => {
+      setEditingIngredientId(null);
+      setEditError(null);
+      await queryClient.invalidateQueries({ queryKey: ["ingredients-search-meta"] });
+      await queryClient.invalidateQueries({ queryKey: ["ingredients-search"] });
+      await queryClient.invalidateQueries({ queryKey: ["ingredients-pending"] });
+    },
+    onError: (err: unknown) => {
+      const e = err as { status?: number; data?: { error?: string } };
+      if (e?.status === 409) {
+        setEditError("That name is already taken.");
+        return;
+      }
+      setEditError(e?.data?.error ?? "Update failed.");
+    }
+  });
+
+  const deleteIngredientM = useMutation({
+    mutationFn: (id: number) => apiDeleteIngredient(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["ingredients-search-meta"] });
+      await queryClient.invalidateQueries({ queryKey: ["ingredients-search"] });
+      await queryClient.invalidateQueries({ queryKey: ["ingredients-pending"] });
+    }
+  });
+
+  async function loadIngredientTranslations(id: number) {
+    setIngTranslationLoading(true);
+    try {
+      const rows = await apiListIngredientTranslations(id);
+      setIngredientTranslations(rows);
+    } finally {
+      setIngTranslationLoading(false);
+    }
+  }
+
+  const upsertIngredientTranslationM = useMutation({
+    mutationFn: (input: { ingredientId: number; locale: string; name: string; description?: string | null }) =>
+      apiUpsertIngredientTranslation(input.ingredientId, {
+        locale: input.locale,
+        name: input.name,
+        description: input.description
+      }),
+    onSuccess: async (_, vars) => {
+      setIngTranslationLocale("");
+      setIngTranslationName("");
+      setIngTranslationDescription("");
+      setIngTranslationError(null);
+      await loadIngredientTranslations(vars.ingredientId);
+    },
+    onError: (err: unknown) => {
+      const e = err as { status?: number; data?: { error?: string } };
+      setIngTranslationError(e?.data?.error ?? "Failed to save translation.");
+    }
+  });
+
+  const deleteIngredientTranslationM = useMutation({
+    mutationFn: ({ ingredientId, locale }: { ingredientId: number; locale: string }) =>
+      apiDeleteIngredientTranslation(ingredientId, locale),
+    onSuccess: async (_, vars) => {
+      await loadIngredientTranslations(vars.ingredientId);
+    }
   });
 
   const approveM = useMutation({
@@ -40,22 +194,90 @@ export function MetaIngredientsPage() {
     }
   });
 
+  const uploadCreatedIngredientMediaM = useMutation({
+    mutationFn: async (files: File[]) => {
+      if (!createdIngredient) throw new Error("No ingredient created yet");
+      for (const f of files) {
+        await apiUploadIngredientMedia(createdIngredient.id, f);
+      }
+      const refreshed = await refreshCreatedIngredient(createdIngredient.id, createdIngredient.canonicalName);
+      if (refreshed) setCreatedIngredient(refreshed);
+    }
+  });
+
+  const deleteCreatedIngredientMediaM = useMutation({
+    mutationFn: async (mediaId: number) => {
+      if (!createdIngredient) throw new Error("No ingredient created yet");
+      await apiDeleteIngredientMedia(createdIngredient.id, mediaId);
+      const refreshed = await refreshCreatedIngredient(createdIngredient.id, createdIngredient.canonicalName);
+      if (refreshed) setCreatedIngredient(refreshed);
+    }
+  });
+
+  const reorderCreatedIngredientMediaM = useMutation({
+    mutationFn: async (orderedIds: number[]) => {
+      if (!createdIngredient) throw new Error("No ingredient created yet");
+      await apiReorderIngredientMedia(createdIngredient.id, orderedIds);
+      const refreshed = await refreshCreatedIngredient(createdIngredient.id, createdIngredient.canonicalName);
+      if (refreshed) setCreatedIngredient(refreshed);
+    }
+  });
+
+  const uploadSearchIngredientMediaM = useMutation({
+    mutationFn: async ({ ingredientId, files }: { ingredientId: number; files: File[] }) => {
+      for (const f of files) {
+        await apiUploadIngredientMedia(ingredientId, f);
+      }
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["ingredients-search-meta"] });
+    }
+  });
+
+  const deleteSearchIngredientMediaM = useMutation({
+    mutationFn: ({ ingredientId, mediaId }: { ingredientId: number; mediaId: number }) =>
+      apiDeleteIngredientMedia(ingredientId, mediaId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["ingredients-search-meta"] });
+    }
+  });
+
+  const reorderSearchIngredientMediaM = useMutation({
+    mutationFn: ({ ingredientId, orderedIds }: { ingredientId: number; orderedIds: number[] }) =>
+      apiReorderIngredientMedia(ingredientId, orderedIds),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["ingredients-search-meta"] });
+    }
+  });
+
+  const searchMediaBusy =
+    uploadSearchIngredientMediaM.isPending ||
+    deleteSearchIngredientMediaM.isPending ||
+    reorderSearchIngredientMediaM.isPending;
+
   const createM = useMutation({
-    mutationFn: () =>
-      apiCreateIngredient({
-        canonicalName,
+    mutationFn: async () => {
+      const created = await apiCreateIngredient({
+        canonicalName: canonicalName.trim(),
         ...(slug.trim() ? { slug: slug.trim() } : {}),
         ...(description.trim() ? { description: description.trim() } : {}),
         isCommonAllergen,
         ...(commonAllergenGroup.trim() ? { commonAllergenGroup: commonAllergenGroup.trim() } : {})
-      }),
-    onSuccess: () => {
+      });
+      for (const f of photoFiles) {
+        await apiUploadIngredientMedia(created.id, f);
+      }
+      return (await refreshCreatedIngredient(created.id, created.canonicalName)) ?? created;
+    },
+    onSuccess: (ing) => {
       setFormError(null);
       setCanonicalName("");
       setSlug("");
       setDescription("");
       setIsCommonAllergen(false);
       setCommonAllergenGroup("");
+      setPhotoFiles([]);
+      setCreatedIngredient(ing);
       void queryClient.invalidateQueries({ queryKey: ["ingredients-search"] });
     },
     onError: (err: unknown) => {
@@ -72,8 +294,26 @@ export function MetaIngredientsPage() {
     }
   });
 
+  const createdGalleryBusy =
+    createM.isPending ||
+    uploadCreatedIngredientMediaM.isPending ||
+    deleteCreatedIngredientMediaM.isPending ||
+    reorderCreatedIngredientMediaM.isPending;
+
   return (
     <div className="space-y-6">
+      <ConfirmDialog
+        open={confirmDialog != null}
+        title={confirmDialog?.title ?? ""}
+        message={confirmDialog?.message ?? ""}
+        confirmLabel={confirmDialog?.confirmLabel ?? "Confirm"}
+        destructive={confirmDialog?.destructive ?? false}
+        onConfirm={() => {
+          confirmDialog?.onConfirm();
+          setConfirmDialog(null);
+        }}
+        onCancel={() => setConfirmDialog(null)}
+      />
       <div>
         <h1 className="text-xl font-semibold">Ingredient catalog (meta owner)</h1>
         <p className="text-sm text-muted-foreground">
@@ -124,11 +364,15 @@ export function MetaIngredientsPage() {
                       variant="ghost"
                       className="text-red-700"
                       disabled={approveM.isPending || rejectM.isPending}
-                      onClick={() => {
-                        if (window.confirm(`Reject “${row.canonicalName}”? This cannot be undone.`)) {
-                          rejectM.mutate(row.id);
-                        }
-                      }}
+                      onClick={() =>
+                        setConfirmDialog({
+                          title: "Reject ingredient",
+                          message: `Reject "${row.canonicalName}"? This cannot be undone.`,
+                          confirmLabel: "Reject",
+                          destructive: true,
+                          onConfirm: () => rejectM.mutate(row.id)
+                        })
+                      }
                     >
                       Reject
                     </Button>
@@ -136,6 +380,423 @@ export function MetaIngredientsPage() {
                 </li>
               ))}
             </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Search ingredients</CardTitle>
+          <CardDescription>Search by name to edit or delete any ingredient in the dictionary.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Type a name to search (e.g. garlic)..."
+            autoComplete="off"
+            className="max-w-sm"
+          />
+          {searchQ.isFetching && <p className="mt-2 text-xs text-muted-foreground">Searching…</p>}
+          {searchQ.isFetched && !searchQ.isFetching && debouncedQuery.length >= 1 && (
+            <div className="mt-3 space-y-2">
+              {(searchQ.data?.length ?? 0) === 0 ? (
+                <p className="text-sm text-muted-foreground">No ingredients found for "{debouncedQuery}".</p>
+              ) : (
+                searchQ.data!.map((ing) => (
+                  <div key={ing.id} className="rounded border border-slate-200 bg-white p-3 text-sm">
+                    {editingIngredientId === ing.id ? (
+                      <form
+                        className="space-y-3"
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          if (!editName.trim()) return;
+                          updateIngredientM.mutate({
+                            id: ing.id,
+                            input: {
+                              canonicalName: editName.trim(),
+                              description: editDescription.trim() || null,
+                              isCommonAllergen: editIsAllergen,
+                              commonAllergenGroup: editIsAllergen ? editAllergenGroup.trim() || null : null
+                            }
+                          });
+                        }}
+                      >
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <div>
+                            <label className="mb-0.5 block text-xs text-slate-500">Name</label>
+                            <Input
+                              value={editName}
+                              onChange={(e) => setEditName(e.target.value)}
+                              required
+                              autoFocus
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-0.5 block text-xs text-slate-500">Description</label>
+                            <Input
+                              value={editDescription}
+                              onChange={(e) => setEditDescription(e.target.value)}
+                              placeholder="Optional"
+                            />
+                          </div>
+                        </div>
+                        <label className="flex items-center gap-2 text-xs text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={editIsAllergen}
+                            onChange={(e) => setEditIsAllergen(e.target.checked)}
+                            className="rounded border-slate-300"
+                          />
+                          Common allergen
+                        </label>
+                        {editIsAllergen && (
+                          <div>
+                            <label className="mb-0.5 block text-xs text-slate-500">Allergen group</label>
+                            <Input
+                              value={editAllergenGroup}
+                              onChange={(e) => setEditAllergenGroup(e.target.value)}
+                              placeholder="e.g. sesame"
+                            />
+                          </div>
+                        )}
+                        {editError && <p className="text-xs text-red-600">{editError}</p>}
+                        <div className="flex gap-2">
+                          <Button type="submit" size="sm" disabled={updateIngredientM.isPending}>
+                            {updateIngredientM.isPending ? "Saving…" : "Save"}
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => { setEditingIngredientId(null); setEditError(null); }}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-medium text-slate-900">{ing.canonicalName}</p>
+                            {ing.description && (
+                              <p className="text-xs text-slate-500 mt-0.5">{ing.description}</p>
+                            )}
+                            <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
+                              <span>slug: {ing.slug}</span>
+                              {ing.isCommonAllergen && (
+                                <span className="text-amber-700">
+                                  allergen{ing.commonAllergenGroup ? `: ${ing.commonAllergenGroup}` : ""}
+                                </span>
+                              )}
+                              <span className={ing.approvalStatus === "approved" ? "text-emerald-700" : "text-amber-700"}>
+                                {ing.approvalStatus}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setEditingIngredientId(ing.id);
+                                setEditName(ing.canonicalName);
+                                setEditDescription(ing.description ?? "");
+                                setEditIsAllergen(ing.isCommonAllergen);
+                                setEditAllergenGroup(ing.commonAllergenGroup ?? "");
+                                setEditError(null);
+                              }}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                setMediaIngredientId(mediaIngredientId === ing.id ? null : ing.id)
+                              }
+                            >
+                              {mediaIngredientId === ing.id ? "Close media" : "Media"}
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={async () => {
+                                if (translatingIngredientId === ing.id) {
+                                  setTranslatingIngredientId(null);
+                                } else {
+                                  setTranslatingIngredientId(ing.id);
+                                  setIngTranslationLocale("");
+                                  setIngTranslationName("");
+                                  setIngTranslationDescription("");
+                                  setIngTranslationError(null);
+                                  await loadIngredientTranslations(ing.id);
+                                }
+                              }}
+                            >
+                              Translations
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-700"
+                              disabled={deleteIngredientM.isPending}
+                              onClick={() =>
+                                setConfirmDialog({
+                                  title: "Delete ingredient",
+                                  message: `Delete "${ing.canonicalName}"? This cannot be undone. The ingredient must not be in use by any dishes.`,
+                                  confirmLabel: "Delete",
+                                  destructive: true,
+                                  onConfirm: () => deleteIngredientM.mutate(ing.id)
+                                })
+                              }
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </div>
+
+                        {mediaIngredientId === ing.id && (() => {
+                          const mediaSorted = [...(ing.media ?? [])].sort(
+                            (a, b) => a.displayOrder - b.displayOrder || a.id - b.id
+                          );
+                          return (
+                            <div className="border-t border-slate-100 pt-3 space-y-2">
+                              <p className="text-xs font-medium text-slate-800">Media gallery</p>
+                              {mediaSorted.length > 0 ? (
+                                <ul className="space-y-2">
+                                  {mediaSorted.map((m, index) => (
+                                    <li
+                                      key={m.id}
+                                      className="flex flex-wrap items-start gap-2 rounded border border-slate-100 bg-slate-50/80 p-2"
+                                    >
+                                      <div className="h-16 w-16 shrink-0 overflow-hidden rounded bg-slate-200">
+                                        {m.kind === "image" ? (
+                                          <img
+                                            src={resolveUploadAssetUrl(m.url)}
+                                            alt=""
+                                            className="h-full w-full object-cover"
+                                          />
+                                        ) : (
+                                          <video
+                                            src={resolveUploadAssetUrl(m.url)}
+                                            className="h-full w-full object-cover"
+                                            controls
+                                            muted
+                                            playsInline
+                                          />
+                                        )}
+                                      </div>
+                                      <div className="min-w-0 flex-1">
+                                        <p className="text-[11px] font-medium capitalize text-slate-800">{m.kind}</p>
+                                        <div className="mt-1 flex flex-wrap gap-1">
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-6 text-[11px]"
+                                            disabled={index === 0 || searchMediaBusy}
+                                            onClick={() => {
+                                              const next = [...mediaSorted];
+                                              [next[index - 1], next[index]] = [next[index]!, next[index - 1]!];
+                                              reorderSearchIngredientMediaM.mutate({
+                                                ingredientId: ing.id,
+                                                orderedIds: next.map((x) => x.id)
+                                              });
+                                            }}
+                                          >
+                                            Up
+                                          </Button>
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-6 text-[11px]"
+                                            disabled={index >= mediaSorted.length - 1 || searchMediaBusy}
+                                            onClick={() => {
+                                              const next = [...mediaSorted];
+                                              [next[index], next[index + 1]] = [next[index + 1]!, next[index]!];
+                                              reorderSearchIngredientMediaM.mutate({
+                                                ingredientId: ing.id,
+                                                orderedIds: next.map((x) => x.id)
+                                              });
+                                            }}
+                                          >
+                                            Down
+                                          </Button>
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-6 border-red-200 text-[11px] text-red-700 hover:bg-red-50"
+                                            disabled={searchMediaBusy}
+                                            onClick={() =>
+                                              setConfirmDialog({
+                                                title: "Remove media",
+                                                message: `Remove this ${m.kind} from the ingredient gallery?`,
+                                                confirmLabel: "Remove",
+                                                destructive: true,
+                                                onConfirm: () =>
+                                                  deleteSearchIngredientMediaM.mutate({
+                                                    ingredientId: ing.id,
+                                                    mediaId: m.id
+                                                  })
+                                              })
+                                            }
+                                          >
+                                            Remove
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <p className="text-xs text-muted-foreground">No photos or videos yet.</p>
+                              )}
+                              <input
+                                type="file"
+                                multiple
+                                accept={GALLERY_MEDIA_ACCEPT}
+                                className="max-w-full text-xs file:mr-2 file:rounded file:border-0 file:bg-slate-200 file:px-2 file:py-1"
+                                disabled={searchMediaBusy}
+                                onChange={(e) => {
+                                  const files = Array.from(e.target.files ?? []);
+                                  if (files.length > 0)
+                                    uploadSearchIngredientMediaM.mutate({ ingredientId: ing.id, files });
+                                  e.target.value = "";
+                                }}
+                              />
+                              {searchMediaBusy && (
+                                <p className="text-xs text-muted-foreground">Updating…</p>
+                              )}
+                            </div>
+                          );
+                        })()}
+
+                        {translatingIngredientId === ing.id && (
+                          <div className="border-t border-slate-100 pt-3 space-y-3">
+                            <p className="text-xs font-medium text-slate-800">Translations</p>
+                            {ingTranslationLoading ? (
+                              <p className="text-xs text-muted-foreground">Loading…</p>
+                            ) : (
+                              <>
+                                {ingredientTranslations.length > 0 && (
+                                  <ul className="space-y-1">
+                                    {ingredientTranslations.map((t) => (
+                                      <li
+                                        key={t.locale}
+                                        className="flex flex-wrap items-start justify-between gap-1 rounded border border-slate-100 bg-slate-50 px-2 py-1.5 text-xs"
+                                      >
+                                        <div className="min-w-0">
+                                          <span className="mr-1.5 rounded bg-slate-200 px-1 py-0.5 font-mono text-[11px] font-semibold text-slate-700">
+                                            {t.locale}
+                                          </span>
+                                          <span className="font-medium text-slate-900">{t.name}</span>
+                                          {t.description && (
+                                            <p className="mt-0.5 text-[11px] text-slate-500">{t.description}</p>
+                                          )}
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setConfirmDialog({
+                                              title: "Delete translation",
+                                              message: `Remove the "${t.locale}" translation for "${ing.canonicalName}"?`,
+                                              confirmLabel: "Delete",
+                                              destructive: true,
+                                              onConfirm: () =>
+                                                deleteIngredientTranslationM.mutate({
+                                                  ingredientId: ing.id,
+                                                  locale: t.locale
+                                                })
+                                            })
+                                          }
+                                          className="text-red-600 hover:text-red-800 disabled:opacity-50"
+                                          disabled={deleteIngredientTranslationM.isPending}
+                                        >
+                                          ✕
+                                        </button>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                                {ingredientTranslations.length === 0 && (
+                                  <p className="text-xs text-slate-500">No translations yet.</p>
+                                )}
+                                <form
+                                  className="space-y-2"
+                                  onSubmit={(e) => {
+                                    e.preventDefault();
+                                    if (!ingTranslationLocale.trim() || !ingTranslationName.trim()) return;
+                                    upsertIngredientTranslationM.mutate({
+                                      ingredientId: ing.id,
+                                      locale: ingTranslationLocale.trim(),
+                                      name: ingTranslationName.trim(),
+                                      description: ingTranslationDescription.trim() || null
+                                    });
+                                  }}
+                                >
+                                  <div className="grid gap-2 sm:grid-cols-3">
+                                    <div>
+                                      <label className="mb-0.5 block text-[11px] text-slate-500">Locale</label>
+                                      <Input
+                                        value={ingTranslationLocale}
+                                        onChange={(e) => setIngTranslationLocale(e.target.value)}
+                                        placeholder="fr"
+                                        className="h-7 text-xs"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="mb-0.5 block text-[11px] text-slate-500">Name</label>
+                                      <Input
+                                        value={ingTranslationName}
+                                        onChange={(e) => setIngTranslationName(e.target.value)}
+                                        placeholder="Translated name"
+                                        className="h-7 text-xs"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="mb-0.5 block text-[11px] text-slate-500">Description</label>
+                                      <Input
+                                        value={ingTranslationDescription}
+                                        onChange={(e) => setIngTranslationDescription(e.target.value)}
+                                        placeholder="Optional"
+                                        className="h-7 text-xs"
+                                      />
+                                    </div>
+                                  </div>
+                                  {ingTranslationError && (
+                                    <p className="text-xs text-red-600">{ingTranslationError}</p>
+                                  )}
+                                  <Button
+                                    type="submit"
+                                    size="sm"
+                                    className="h-7 text-xs"
+                                    disabled={
+                                      upsertIngredientTranslationM.isPending ||
+                                      !ingTranslationLocale.trim() ||
+                                      !ingTranslationName.trim()
+                                    }
+                                  >
+                                    {upsertIngredientTranslationM.isPending ? "Saving…" : "Save translation"}
+                                  </Button>
+                                </form>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
           )}
         </CardContent>
       </Card>
@@ -219,6 +880,139 @@ export function MetaIngredientsPage() {
                 />
               </div>
             )}
+            <div className="space-y-2">
+              <label htmlFor="ingredientPhoto" className="text-sm font-medium">
+                Photos / videos (optional)
+              </label>
+              <p className="text-xs text-muted-foreground">
+                Stored under the API <code className="rounded bg-slate-100 px-1">uploads/</code> until you move to cloud
+                storage. {GALLERY_MULTI_FILE_HINT} Reorder under Menu builder → ingredient search after the entry exists.
+              </p>
+              <input
+                id="ingredientPhoto"
+                type="file"
+                multiple
+                accept={GALLERY_MEDIA_ACCEPT}
+                className="max-w-xs text-sm file:mr-2 file:rounded file:border-0 file:bg-slate-200 file:px-2 file:py-1"
+                disabled={createM.isPending}
+                onChange={(e) => {
+                  setPhotoFiles(Array.from(e.target.files ?? []));
+                  e.target.value = "";
+                }}
+              />
+              {photoFiles.length > 0 ? (
+                <p className="text-xs text-muted-foreground">{photoFiles.length} file(s) selected.</p>
+              ) : null}
+              {photoPreviewUrl ? (
+                <img
+                  src={photoPreviewUrl}
+                  alt=""
+                  className="mt-2 h-24 w-24 rounded-md border object-cover"
+                />
+              ) : null}
+            </div>
+            {createdIngredient ? (
+              <div className="space-y-2 rounded border border-slate-200 bg-white p-3">
+                <p className="text-sm font-medium">Media gallery</p>
+                <p className="text-xs text-muted-foreground">
+                  For: <span className="font-medium text-slate-800">{createdIngredient.canonicalName}</span>.{" "}
+                  {GALLERY_MULTI_FILE_HINT}
+                </p>
+                {createdIngredientMediaSorted.length > 0 ? (
+                  <ul className="space-y-2">
+                    {createdIngredientMediaSorted.map((m, index) => (
+                      <li
+                        key={m.id}
+                        className="flex flex-wrap items-start gap-2 rounded border border-slate-100 bg-slate-50/80 p-2"
+                      >
+                        <div className="h-16 w-16 shrink-0 overflow-hidden rounded bg-slate-200">
+                          {m.kind === "image" ? (
+                            <img
+                              src={resolveUploadAssetUrl(m.url)}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <video
+                              src={resolveUploadAssetUrl(m.url)}
+                              className="h-full w-full object-cover"
+                              controls
+                              muted
+                              playsInline
+                            />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-medium capitalize text-slate-800">{m.kind}</p>
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-6 text-[11px]"
+                              disabled={index === 0 || createdGalleryBusy}
+                              onClick={() => {
+                                const next = [...createdIngredientMediaSorted];
+                                [next[index - 1], next[index]] = [next[index]!, next[index - 1]!];
+                                reorderCreatedIngredientMediaM.mutate(next.map((x) => x.id));
+                              }}
+                            >
+                              Up
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-6 text-[11px]"
+                              disabled={index >= createdIngredientMediaSorted.length - 1 || createdGalleryBusy}
+                              onClick={() => {
+                                const next = [...createdIngredientMediaSorted];
+                                [next[index], next[index + 1]] = [next[index + 1]!, next[index]!];
+                                reorderCreatedIngredientMediaM.mutate(next.map((x) => x.id));
+                              }}
+                            >
+                              Down
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-6 border-red-200 text-[11px] text-red-700 hover:bg-red-50"
+                              disabled={createdGalleryBusy}
+                              onClick={() =>
+                                setConfirmDialog({
+                                  title: "Remove media",
+                                  message: `Remove this ${m.kind} from the ingredient gallery?`,
+                                  confirmLabel: "Remove",
+                                  destructive: true,
+                                  onConfirm: () => deleteCreatedIngredientMediaM.mutate(m.id)
+                                })
+                              }
+                            >
+                              Remove
+                            </Button>
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-muted-foreground">No photos or videos yet.</p>
+                )}
+                <input
+                  type="file"
+                  multiple
+                  accept={GALLERY_MEDIA_ACCEPT}
+                  className="max-w-full text-xs file:mr-2 file:rounded file:border-0 file:bg-slate-200 file:px-2 file:py-1"
+                  disabled={createdGalleryBusy}
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files ?? []);
+                    if (files.length > 0) uploadCreatedIngredientMediaM.mutate(files);
+                    e.target.value = "";
+                  }}
+                />
+              </div>
+            ) : null}
             {formError && <p className="text-sm text-red-600">{formError}</p>}
             <Button type="submit" disabled={createM.isPending || !canonicalName.trim()}>
               {createM.isPending ? "Saving…" : "Add to dictionary"}

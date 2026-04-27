@@ -1,15 +1,26 @@
 import type { FastifyInstance } from "fastify";
 import type { SQL } from "drizzle-orm";
-import { and, asc, eq, ilike, inArray, or } from "drizzle-orm";
-import { createIngredientSchema, requestIngredientSchema } from "@digital-menu/shared";
+import { and, asc, eq, ilike, inArray, max, or } from "drizzle-orm";
+import {
+  createIngredientSchema,
+  requestIngredientSchema,
+  reorderIngredientMediaSchema,
+  updateIngredientSchema,
+  upsertTranslationSchema
+} from "@digital-menu/shared";
 import { db } from "../lib/db.js";
-import { dishIngredients, ingredients, restaurants } from "@digital-menu/db";
+import { dishIngredients, ingredients, ingredientMedia, ingredientTranslations, restaurants } from "@digital-menu/db";
 import { requireAuth } from "../middleware/auth.js";
 import {
   canUserManageRestaurant,
   getRestaurantIdsManagedByUser
 } from "../lib/restaurant-access.js";
 import { getSession, getSessionIdFromCookie } from "../lib/auth.js";
+import {
+  localMediaStorage,
+  saveMultipartImage,
+  saveMultipartMedia
+} from "../lib/uploads.js";
 
 function slugifyCanonicalName(name: string): string {
   const s = name
@@ -38,6 +49,50 @@ function visibilityWhere(restaurantIds: number[]): SQL {
     approved,
     and(eq(ingredients.approvalStatus, "pending"), inArray(ingredients.requestedByRestaurantId, restaurantIds))
   )!;
+}
+
+type IngredientMediaRow = typeof ingredientMedia.$inferSelect;
+
+function serializeIngredientMediaRows(rows: IngredientMediaRow[]) {
+  return rows.map((m) => ({
+    id: m.id,
+    url: m.url,
+    kind: m.kind,
+    displayOrder: m.displayOrder
+  }));
+}
+
+async function loadMediaByIngredientIds(ids: number[]): Promise<Map<number, IngredientMediaRow[]>> {
+  const map = new Map<number, IngredientMediaRow[]>();
+  if (ids.length === 0) return map;
+  const rows = await db
+    .select()
+    .from(ingredientMedia)
+    .where(inArray(ingredientMedia.ingredientId, ids))
+    .orderBy(asc(ingredientMedia.displayOrder), asc(ingredientMedia.id));
+  for (const row of rows) {
+    const list = map.get(row.ingredientId) ?? [];
+    list.push(row);
+    map.set(row.ingredientId, list);
+  }
+  return map;
+}
+
+async function ingredientWithMedia(row: typeof ingredients.$inferSelect) {
+  const mediaMap = await loadMediaByIngredientIds([row.id]);
+  return { ...row, media: serializeIngredientMediaRows(mediaMap.get(row.id) ?? []) };
+}
+
+async function canEditIngredientMedia(
+  userId: number,
+  role: string,
+  row: typeof ingredients.$inferSelect
+): Promise<boolean> {
+  if (role === "superadmin") return true;
+  if (row.approvalStatus === "pending" && row.requestedByRestaurantId != null) {
+    return canUserManageRestaurant(userId, row.requestedByRestaurantId);
+  }
+  return false;
 }
 
 export async function ingredientRoutes(app: FastifyInstance) {
@@ -73,16 +128,21 @@ export async function ingredientRoutes(app: FastifyInstance) {
     const restaurantIds = sessionUser ? await getRestaurantIdsManagedByUser(sessionUser.userId) : [];
     const vis = visibilityWhere(restaurantIds);
 
-    if (!q) {
-      const list = await db.select().from(ingredients).where(vis).limit(50);
-      return reply.send(list);
-    }
-    const list = await db
-      .select()
-      .from(ingredients)
-      .where(and(vis, ilike(ingredients.canonicalName, `%${q}%`)))
-      .limit(30);
-    return reply.send(list);
+    const list = !q
+      ? await db.select().from(ingredients).where(vis).limit(50)
+      : await db
+          .select()
+          .from(ingredients)
+          .where(and(vis, ilike(ingredients.canonicalName, `%${q}%`)))
+          .limit(30);
+
+    const mediaMap = await loadMediaByIngredientIds(list.map((i) => i.id));
+    return reply.send(
+      list.map((i) => ({
+        ...i,
+        media: serializeIngredientMediaRows(mediaMap.get(i.id) ?? [])
+      }))
+    );
   });
 
   app.post<{ Body: unknown }>("/", async (request, reply) => {
@@ -122,7 +182,8 @@ export async function ingredientRoutes(app: FastifyInstance) {
           requestedByRestaurantId: null
         })
         .returning();
-      return reply.status(201).send(created);
+      if (!created) return reply.status(500).send({ error: "Failed to create ingredient" });
+      return reply.status(201).send(await ingredientWithMedia(created));
     }
 
     const parsed = requestIngredientSchema.safeParse(request.body);
@@ -156,7 +217,199 @@ export async function ingredientRoutes(app: FastifyInstance) {
         requestedByRestaurantId: restaurantId
       })
       .returning();
-    return reply.status(201).send(created);
+    if (!created) return reply.status(500).send({ error: "Failed to create ingredient" });
+    return reply.status(201).send(await ingredientWithMedia(created));
+  });
+
+  app.post<{ Params: { id: string } }>("/:id/media", async (request, reply) => {
+    const auth = await requireAuth(request, reply);
+    if (!auth) return;
+    if (auth.user.role === "diner") {
+      return reply.status(403).send({ error: "Forbidden", code: "FORBIDDEN" });
+    }
+    const id = Number(request.params.id);
+    if (Number.isNaN(id)) return reply.status(400).send({ error: "Invalid id" });
+    const [row] = await db.select().from(ingredients).where(eq(ingredients.id, id)).limit(1);
+    if (!row) return reply.status(404).send({ error: "Not found", code: "NOT_FOUND" });
+    if (!(await canEditIngredientMedia(auth.user.userId, auth.user.role, row))) {
+      return reply.status(403).send({ error: "Forbidden", code: "FORBIDDEN" });
+    }
+
+    const file = await request.file();
+    const saved = await saveMultipartMedia(file, "ingredients", localMediaStorage);
+    if (!saved.ok) {
+      return reply.status(saved.status).send({ error: saved.error, code: saved.code });
+    }
+
+    const [maxRow] = await db
+      .select({ m: max(ingredientMedia.displayOrder) })
+      .from(ingredientMedia)
+      .where(eq(ingredientMedia.ingredientId, id));
+    const nextOrder = Number(maxRow?.m ?? -1) + 1;
+
+    const [mediaRow] = await db
+      .insert(ingredientMedia)
+      .values({
+        ingredientId: id,
+        url: saved.url,
+        kind: saved.kind,
+        displayOrder: nextOrder
+      })
+      .returning();
+
+    if (!mediaRow) return reply.status(500).send({ error: "Failed to save media" });
+
+    const mediaList = await db
+      .select()
+      .from(ingredientMedia)
+      .where(eq(ingredientMedia.ingredientId, id))
+      .orderBy(asc(ingredientMedia.displayOrder), asc(ingredientMedia.id));
+    const firstImage = mediaList.find((m) => m.kind === "image");
+    await db
+      .update(ingredients)
+      .set({ imageUrl: firstImage?.url ?? row.imageUrl })
+      .where(eq(ingredients.id, id));
+
+    return reply.status(201).send({ media: serializeIngredientMediaRows([mediaRow])[0] });
+  });
+
+  app.patch<{ Params: { id: string }; Body: unknown }>("/:id/media/order", async (request, reply) => {
+    const auth = await requireAuth(request, reply);
+    if (!auth) return;
+    if (auth.user.role === "diner") {
+      return reply.status(403).send({ error: "Forbidden", code: "FORBIDDEN" });
+    }
+    const id = Number(request.params.id);
+    if (Number.isNaN(id)) return reply.status(400).send({ error: "Invalid id" });
+    const [row] = await db.select().from(ingredients).where(eq(ingredients.id, id)).limit(1);
+    if (!row) return reply.status(404).send({ error: "Not found", code: "NOT_FOUND" });
+    if (!(await canEditIngredientMedia(auth.user.userId, auth.user.role, row))) {
+      return reply.status(403).send({ error: "Forbidden", code: "FORBIDDEN" });
+    }
+
+    const parsed = reorderIngredientMediaSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(422).send({ error: "Validation failed", details: parsed.error.flatten() });
+    }
+    const { orderedIds } = parsed.data;
+
+    const existing = await db.select({ id: ingredientMedia.id }).from(ingredientMedia).where(eq(ingredientMedia.ingredientId, id));
+    const idSet = new Set(existing.map((r) => r.id));
+    if (orderedIds.length !== idSet.size) {
+      return reply.status(400).send({ error: "orderedIds must list every media item exactly once" });
+    }
+    for (const mid of orderedIds) {
+      if (!idSet.has(mid)) {
+        return reply.status(400).send({ error: "Invalid media id for this ingredient" });
+      }
+    }
+
+    await db.transaction(async (tx) => {
+      for (let i = 0; i < orderedIds.length; i++) {
+        await tx
+          .update(ingredientMedia)
+          .set({ displayOrder: i })
+          .where(eq(ingredientMedia.id, orderedIds[i]!));
+      }
+    });
+
+    const mediaList = await db
+      .select()
+      .from(ingredientMedia)
+      .where(eq(ingredientMedia.ingredientId, id))
+      .orderBy(asc(ingredientMedia.displayOrder), asc(ingredientMedia.id));
+    const firstImage = mediaList.find((m) => m.kind === "image");
+    await db
+      .update(ingredients)
+      .set({ imageUrl: firstImage?.url ?? null })
+      .where(eq(ingredients.id, id));
+
+    return reply.send({ media: serializeIngredientMediaRows(mediaList) });
+  });
+
+  app.delete<{ Params: { id: string; mediaId: string } }>("/:id/media/:mediaId", async (request, reply) => {
+    const auth = await requireAuth(request, reply);
+    if (!auth) return;
+    if (auth.user.role === "diner") {
+      return reply.status(403).send({ error: "Forbidden", code: "FORBIDDEN" });
+    }
+    const id = Number(request.params.id);
+    const mediaId = Number(request.params.mediaId);
+    if (Number.isNaN(id) || Number.isNaN(mediaId)) {
+      return reply.status(400).send({ error: "Invalid id" });
+    }
+    const [row] = await db.select().from(ingredients).where(eq(ingredients.id, id)).limit(1);
+    if (!row) return reply.status(404).send({ error: "Not found", code: "NOT_FOUND" });
+    if (!(await canEditIngredientMedia(auth.user.userId, auth.user.role, row))) {
+      return reply.status(403).send({ error: "Forbidden", code: "FORBIDDEN" });
+    }
+
+    const [mediaRow] = await db.select().from(ingredientMedia).where(eq(ingredientMedia.id, mediaId)).limit(1);
+    if (!mediaRow || mediaRow.ingredientId !== id) {
+      return reply.status(404).send({ error: "Media not found", code: "NOT_FOUND" });
+    }
+
+    await db.delete(ingredientMedia).where(eq(ingredientMedia.id, mediaId));
+    await localMediaStorage.deleteByPublicUrl(mediaRow.url);
+
+    const mediaList = await db
+      .select()
+      .from(ingredientMedia)
+      .where(eq(ingredientMedia.ingredientId, id))
+      .orderBy(asc(ingredientMedia.displayOrder), asc(ingredientMedia.id));
+    const firstImage = mediaList.find((m) => m.kind === "image");
+    await db
+      .update(ingredients)
+      .set({ imageUrl: firstImage?.url ?? null })
+      .where(eq(ingredients.id, id));
+
+    return reply.status(204).send();
+  });
+
+  app.post<{ Params: { id: string } }>("/:id/image", async (request, reply) => {
+    const auth = await requireAuth(request, reply);
+    if (!auth) return;
+    if (auth.user.role === "diner") {
+      return reply.status(403).send({ error: "Forbidden", code: "FORBIDDEN" });
+    }
+    const id = Number(request.params.id);
+    if (Number.isNaN(id)) return reply.status(400).send({ error: "Invalid id" });
+    const [row] = await db.select().from(ingredients).where(eq(ingredients.id, id)).limit(1);
+    if (!row) return reply.status(404).send({ error: "Not found", code: "NOT_FOUND" });
+
+    if (!(await canEditIngredientMedia(auth.user.userId, auth.user.role, row))) {
+      return reply.status(403).send({ error: "Forbidden", code: "FORBIDDEN" });
+    }
+
+    const file = await request.file();
+    const saved = await saveMultipartImage(file, "ingredients");
+    if (!saved.ok) {
+      return reply.status(saved.status).send({ error: saved.error, code: saved.code });
+    }
+
+    const [maxRow] = await db
+      .select({ m: max(ingredientMedia.displayOrder) })
+      .from(ingredientMedia)
+      .where(eq(ingredientMedia.ingredientId, id));
+    const nextOrder = Number(maxRow?.m ?? -1) + 1;
+
+    await db.insert(ingredientMedia).values({
+      ingredientId: id,
+      url: saved.imageUrl,
+      kind: "image",
+      displayOrder: nextOrder
+    });
+
+    const [updated] = await db
+      .update(ingredients)
+      .set({ imageUrl: saved.imageUrl })
+      .where(eq(ingredients.id, id))
+      .returning();
+
+    return reply.send({
+      imageUrl: saved.imageUrl,
+      ingredient: await ingredientWithMedia(updated!)
+    });
   });
 
   app.post<{ Params: { id: string } }>("/:id/approve", async (request, reply) => {
@@ -176,7 +429,46 @@ export async function ingredientRoutes(app: FastifyInstance) {
       .set({ approvalStatus: "approved", requestedByRestaurantId: null })
       .where(eq(ingredients.id, id))
       .returning();
-    return reply.send(updated);
+    return reply.send(await ingredientWithMedia(updated!));
+  });
+
+  app.patch<{ Params: { id: string }; Body: unknown }>("/:id", async (request, reply) => {
+    const auth = await requireAuth(request, reply);
+    if (!auth) return;
+    if (auth.user.role !== "superadmin") {
+      return reply.status(403).send({ error: "Forbidden", code: "FORBIDDEN" });
+    }
+    const id = Number(request.params.id);
+    if (Number.isNaN(id)) return reply.status(400).send({ error: "Invalid id" });
+    const [row] = await db.select().from(ingredients).where(eq(ingredients.id, id)).limit(1);
+    if (!row) return reply.status(404).send({ error: "Not found", code: "NOT_FOUND" });
+
+    const parsed = updateIngredientSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(422).send({ error: "Validation failed", details: parsed.error.flatten() });
+    }
+    const { canonicalName, description, isCommonAllergen, commonAllergenGroup } = parsed.data;
+
+    if (canonicalName !== undefined && canonicalName !== row.canonicalName) {
+      const [nameDup] = await db
+        .select({ id: ingredients.id })
+        .from(ingredients)
+        .where(eq(ingredients.canonicalName, canonicalName))
+        .limit(1);
+      if (nameDup) {
+        return reply.status(409).send({ error: "Ingredient name already exists", code: "CANONICAL_NAME_TAKEN" });
+      }
+    }
+
+    const updates: Partial<typeof ingredients.$inferInsert> = {};
+    if (canonicalName !== undefined) updates.canonicalName = canonicalName;
+    if (description !== undefined) updates.description = description;
+    if (isCommonAllergen !== undefined) updates.isCommonAllergen = isCommonAllergen;
+    if (commonAllergenGroup !== undefined) updates.commonAllergenGroup = commonAllergenGroup;
+
+    const [updated] = await db.update(ingredients).set(updates).where(eq(ingredients.id, id)).returning();
+    if (!updated) return reply.status(500).send({ error: "Update failed" });
+    return reply.send(await ingredientWithMedia(updated));
   });
 
   app.delete<{ Params: { id: string } }>("/:id", async (request, reply) => {
@@ -189,16 +481,98 @@ export async function ingredientRoutes(app: FastifyInstance) {
     if (Number.isNaN(id)) return reply.status(400).send({ error: "Invalid id" });
     const [row] = await db.select().from(ingredients).where(eq(ingredients.id, id)).limit(1);
     if (!row) return reply.status(404).send({ error: "Not found", code: "NOT_FOUND" });
-    if (row.approvalStatus !== "pending") {
-      return reply.status(400).send({ error: "Only pending ingredients can be rejected", code: "NOT_PENDING" });
-    }
     const [used] = await db.select({ id: dishIngredients.id }).from(dishIngredients).where(eq(dishIngredients.ingredientId, id)).limit(1);
     if (used) {
       return reply
         .status(409)
-        .send({ error: "Ingredient is in use; remove from dishes first", code: "IN_USE" });
+        .send({ error: "Ingredient is in use by one or more dishes; remove it from those dishes first", code: "IN_USE" });
     }
     await db.delete(ingredients).where(eq(ingredients.id, id));
+    return reply.status(204).send();
+  });
+
+  // ── Translation endpoints ────────────────────────────────────────────────
+
+  /** GET /:id/translations — list all translations for an ingredient */
+  app.get<{ Params: { id: string } }>("/:id/translations", async (request, reply) => {
+    const auth = await requireAuth(request, reply);
+    if (!auth) return;
+    if (auth.user.role !== "superadmin") {
+      return reply.status(403).send({ error: "Forbidden", code: "FORBIDDEN" });
+    }
+    const id = Number(request.params.id);
+    if (Number.isNaN(id)) return reply.status(400).send({ error: "Invalid id" });
+    const [row] = await db.select({ id: ingredients.id }).from(ingredients).where(eq(ingredients.id, id)).limit(1);
+    if (!row) return reply.status(404).send({ error: "Not found", code: "NOT_FOUND" });
+    const rows = await db
+      .select()
+      .from(ingredientTranslations)
+      .where(eq(ingredientTranslations.ingredientId, id))
+      .orderBy(asc(ingredientTranslations.locale));
+    return reply.send(rows);
+  });
+
+  /** PUT /:id/translations/:locale — create or replace a translation */
+  app.put<{ Params: { id: string; locale: string }; Body: unknown }>(
+    "/:id/translations/:locale",
+    async (request, reply) => {
+      const auth = await requireAuth(request, reply);
+      if (!auth) return;
+      if (auth.user.role !== "superadmin") {
+        return reply.status(403).send({ error: "Forbidden", code: "FORBIDDEN" });
+      }
+      const id = Number(request.params.id);
+      if (Number.isNaN(id)) return reply.status(400).send({ error: "Invalid id" });
+      const [ingRow] = await db.select({ id: ingredients.id }).from(ingredients).where(eq(ingredients.id, id)).limit(1);
+      if (!ingRow) return reply.status(404).send({ error: "Not found", code: "NOT_FOUND" });
+
+      const parsed = upsertTranslationSchema.safeParse({
+        ...(typeof request.body === "object" && request.body !== null ? request.body : {}),
+        locale: request.params.locale
+      });
+      if (!parsed.success) {
+        return reply.status(422).send({ error: "Validation failed", details: parsed.error.flatten() });
+      }
+      const { locale, name, description } = parsed.data;
+
+      const [existing] = await db
+        .select({ id: ingredientTranslations.id })
+        .from(ingredientTranslations)
+        .where(and(eq(ingredientTranslations.ingredientId, id), eq(ingredientTranslations.locale, locale)))
+        .limit(1);
+
+      let translationRow;
+      if (existing) {
+        [translationRow] = await db
+          .update(ingredientTranslations)
+          .set({ name, description: description ?? null })
+          .where(eq(ingredientTranslations.id, existing.id))
+          .returning();
+      } else {
+        [translationRow] = await db
+          .insert(ingredientTranslations)
+          .values({ ingredientId: id, locale, name, description: description ?? null })
+          .returning();
+      }
+      return reply.status(existing ? 200 : 201).send(translationRow);
+    }
+  );
+
+  /** DELETE /:id/translations/:locale — remove a single locale translation */
+  app.delete<{ Params: { id: string; locale: string } }>("/:id/translations/:locale", async (request, reply) => {
+    const auth = await requireAuth(request, reply);
+    if (!auth) return;
+    if (auth.user.role !== "superadmin") {
+      return reply.status(403).send({ error: "Forbidden", code: "FORBIDDEN" });
+    }
+    const id = Number(request.params.id);
+    if (Number.isNaN(id)) return reply.status(400).send({ error: "Invalid id" });
+    const [ingRow] = await db.select({ id: ingredients.id }).from(ingredients).where(eq(ingredients.id, id)).limit(1);
+    if (!ingRow) return reply.status(404).send({ error: "Not found", code: "NOT_FOUND" });
+    const locale = request.params.locale;
+    await db
+      .delete(ingredientTranslations)
+      .where(and(eq(ingredientTranslations.ingredientId, id), eq(ingredientTranslations.locale, locale)));
     return reply.status(204).send();
   });
 }

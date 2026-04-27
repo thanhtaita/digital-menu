@@ -7,10 +7,14 @@ import {
   apiCreateMenu,
   apiCreateSection,
   apiListDishIngredients,
+  apiListDishTranslations,
+  apiUpsertDishTranslation,
+  apiDeleteDishTranslation,
   apiListDishes,
   apiListMenus,
   apiListSections,
   apiUpdateMenu,
+  apiUpdateSection,
   apiRemoveDishIngredient,
   apiRequestIngredient,
   apiSearchIngredients,
@@ -27,6 +31,7 @@ import {
   type Dish,
   type Ingredient
 } from "../lib/api-client";
+import { ConfirmDialog } from "../components/confirm-dialog";
 import { useAuth } from "@/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
@@ -70,6 +75,26 @@ export function MenuBuilderPage() {
   const [requestIngredientError, setRequestIngredientError] = useState<string | null>(null);
   const [editingDishId, setEditingDishId] = useState<number | null>(null);
   const [editingDishDescription, setEditingDishDescription] = useState("");
+  const [editingDishName, setEditingDishName] = useState("");
+  const [editingDishPrice, setEditingDishPrice] = useState("");
+  const [editingDishAvailable, setEditingDishAvailable] = useState(true);
+  const [editingMenuId, setEditingMenuId] = useState<number | null>(null);
+  const [editingMenuName, setEditingMenuName] = useState("");
+  const [editingSectionId, setEditingSectionId] = useState<number | null>(null);
+  const [editingSectionName, setEditingSectionName] = useState("");
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    destructive?: boolean;
+    onConfirm: () => void;
+  } | null>(null);
+
+  // Dish translation state
+  const [translationLocale, setTranslationLocale] = useState("");
+  const [translationName, setTranslationName] = useState("");
+  const [translationDescription, setTranslationDescription] = useState("");
+  const [translationError, setTranslationError] = useState<string | null>(null);
 
   const menusQ = useQuery({
     queryKey: ["menus", restaurantId],
@@ -95,11 +120,31 @@ export function MenuBuilderPage() {
     enabled: selectedDishId != null
   });
 
+  const dishTranslationsQ = useQuery({
+    queryKey: ["dish-translations", restaurantId, selectedMenuId, selectedSectionId, selectedDishId],
+    queryFn: () =>
+      apiListDishTranslations(restaurantId, selectedMenuId!, selectedSectionId!, selectedDishId!),
+    enabled: selectedMenuId != null && selectedSectionId != null && selectedDishId != null
+  });
+
   const ingredientsQ = useQuery({
     queryKey: ["ingredients-search", ingredientQuery],
     queryFn: () => apiSearchIngredients(ingredientQuery),
     enabled: ingredientQuery.length >= 1
   });
+
+  // Pre-fill the request form with the search query when no results are found
+  useEffect(() => {
+    if (
+      ingredientQuery.trim().length >= 1 &&
+      ingredientsQ.isFetched &&
+      !ingredientsQ.isFetching &&
+      (ingredientsQ.data?.length ?? 0) === 0
+    ) {
+      setRequestIngredientName(ingredientQuery.trim());
+      setRequestIngredientError(null);
+    }
+  }, [ingredientQuery, ingredientsQ.isFetched, ingredientsQ.isFetching, ingredientsQ.data?.length]);
 
   const createMenuM = useMutation({
     mutationFn: () => apiCreateMenu(restaurantId, { name: menuName }),
@@ -110,11 +155,13 @@ export function MenuBuilderPage() {
   });
 
   const updateMenuM = useMutation({
-    mutationFn: (input: { isPublished: boolean }) => {
-      if (selectedMenuId == null) throw new Error("No menu selected");
-      return apiUpdateMenu(restaurantId, selectedMenuId, input);
+    mutationFn: ({ menuId, input }: { menuId?: number; input: { name?: string; isPublished?: boolean } }) => {
+      const id = menuId ?? selectedMenuId;
+      if (id == null) throw new Error("No menu selected");
+      return apiUpdateMenu(restaurantId, id, input);
     },
     onSuccess: async () => {
+      setEditingMenuId(null);
       await queryClient.invalidateQueries({ queryKey: ["menus", restaurantId] });
     }
   });
@@ -123,6 +170,17 @@ export function MenuBuilderPage() {
     mutationFn: () => apiCreateSection(restaurantId, selectedMenuId!, { name: sectionName }),
     onSuccess: async () => {
       setSectionName("");
+      await queryClient.invalidateQueries({ queryKey: ["sections", restaurantId, selectedMenuId] });
+    }
+  });
+
+  const updateSectionM = useMutation({
+    mutationFn: ({ sectionId, name }: { sectionId: number; name: string }) => {
+      if (selectedMenuId == null) throw new Error("No menu selected");
+      return apiUpdateSection(restaurantId, selectedMenuId, sectionId, { name });
+    },
+    onSuccess: async () => {
+      setEditingSectionId(null);
       await queryClient.invalidateQueries({ queryKey: ["sections", restaurantId, selectedMenuId] });
     }
   });
@@ -184,6 +242,42 @@ export function MenuBuilderPage() {
     mutationFn: (ingredientId: number) => apiRemoveDishIngredient(selectedDishId!, ingredientId),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["dish-ingredients", selectedDishId] });
+    }
+  });
+
+  const upsertDishTranslationM = useMutation({
+    mutationFn: (input: { locale: string; name: string; description?: string | null }) => {
+      if (selectedMenuId == null || selectedSectionId == null || selectedDishId == null) {
+        throw new Error("Select menu, section, and dish");
+      }
+      return apiUpsertDishTranslation(restaurantId, selectedMenuId, selectedSectionId, selectedDishId, input);
+    },
+    onSuccess: async () => {
+      setTranslationLocale("");
+      setTranslationName("");
+      setTranslationDescription("");
+      setTranslationError(null);
+      await queryClient.invalidateQueries({
+        queryKey: ["dish-translations", restaurantId, selectedMenuId, selectedSectionId, selectedDishId]
+      });
+    },
+    onError: (err: unknown) => {
+      const e = err as { status?: number; data?: { error?: string } };
+      setTranslationError(e?.data?.error ?? "Failed to save translation.");
+    }
+  });
+
+  const deleteDishTranslationM = useMutation({
+    mutationFn: (locale: string) => {
+      if (selectedMenuId == null || selectedSectionId == null || selectedDishId == null) {
+        throw new Error("Select menu, section, and dish");
+      }
+      return apiDeleteDishTranslation(restaurantId, selectedMenuId, selectedSectionId, selectedDishId, locale);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["dish-translations", restaurantId, selectedMenuId, selectedSectionId, selectedDishId]
+      });
     }
   });
 
@@ -259,11 +353,11 @@ export function MenuBuilderPage() {
   });
 
   const updateDishM = useMutation({
-    mutationFn: ({ description }: { description: string }) => {
+    mutationFn: (input: { name?: string; description?: string | null; price?: string; isAvailable?: boolean }) => {
       if (selectedMenuId == null || selectedSectionId == null || selectedDishId == null) {
         throw new Error("Select menu, section, and dish");
       }
-      return apiUpdateDish(restaurantId, selectedMenuId, selectedSectionId, selectedDishId, { description });
+      return apiUpdateDish(restaurantId, selectedMenuId, selectedSectionId, selectedDishId, input);
     },
     onSuccess: async () => {
       setEditingDishId(null);
@@ -326,7 +420,7 @@ export function MenuBuilderPage() {
   const dishGalleryBusy =
     uploadDishMediaM.isPending || deleteDishMediaM.isPending || reorderDishMediaM.isPending;
 
-  const canEditMenu = user?.role === "superadmin" || user?.role === "admin" || user?.role === "owner";
+  const canEditMenu = user?.role === "superadmin" || user?.role === "restaurant_admin";
 
   const canManageIngredientMedia = (ing: Ingredient) =>
     user?.role === "superadmin" ||
@@ -343,6 +437,22 @@ export function MenuBuilderPage() {
     const sectionDishes = dishesQ.data?.filter((d) => d.sectionId === sectionId) ?? [];
     return sectionDishes.length === 0;
   };
+
+  // A menu can only be deleted when all its sections have been removed first.
+  const canDeleteMenu = (menuId: number): boolean => {
+    if (menuId !== selectedMenuId) return true; // sections not loaded for this menu
+    return (sectionsQ.data?.length ?? 0) === 0;
+  };
+
+  function openConfirm(opts: {
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    destructive?: boolean;
+    onConfirm: () => void;
+  }) {
+    setConfirmDialog(opts);
+  }
 
   if (!Number.isFinite(restaurantId)) {
     return <p className="text-sm text-red-600">Invalid restaurant id.</p>;
@@ -368,6 +478,18 @@ export function MenuBuilderPage() {
 
   return (
     <div className="space-y-4">
+      <ConfirmDialog
+        open={confirmDialog != null}
+        title={confirmDialog?.title ?? ""}
+        message={confirmDialog?.message ?? ""}
+        confirmLabel={confirmDialog?.confirmLabel}
+        destructive={confirmDialog?.destructive}
+        onConfirm={() => {
+          confirmDialog?.onConfirm();
+          setConfirmDialog(null);
+        }}
+        onCancel={() => setConfirmDialog(null)}
+      />
       <h1 className="text-xl font-semibold">Menu builder</h1>
 
       <Card>
@@ -385,35 +507,84 @@ export function MenuBuilderPage() {
                 key={menu.id}
                 className={`rounded border px-2 py-1 text-xs flex items-center gap-1 ${selectedMenuId === menu.id ? "bg-slate-900 text-white" : "bg-white"}`}
               >
-                <button
-                  onClick={() => {
-                    setSelectedMenuId(menu.id);
-                    setSelectedSectionId(null);
-                    setSelectedDishId(null);
-                  }}
-                  className="flex-1 text-left"
-                >
-                  {menu.name}
-                  {menu.isPublished ? (
-                    <span
-                      className={`ml-0.5 ${selectedMenuId === menu.id ? "text-emerald-300" : "text-emerald-600"}`}
-                      title="Published"
-                    >
-                      ●
-                    </span>
-                  ) : null}
-                </button>
-                {canEditMenu && (
-                  <button
-                    onClick={() => {
-                      if (confirm("Delete this menu?")) deleteMenuM.mutate(menu.id);
+                {editingMenuId === menu.id ? (
+                  <form
+                    className="flex items-center gap-1"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (!editingMenuName.trim()) return;
+                      updateMenuM.mutate({ menuId: menu.id, input: { name: editingMenuName.trim() } });
                     }}
-                    disabled={deleteMenuM.isPending}
-                    className={`text-red-700 hover:font-bold ${selectedMenuId === menu.id ? "text-red-300" : ""}`}
-                    title="Delete menu"
                   >
-                    ✕
-                  </button>
+                    <input
+                      autoFocus
+                      value={editingMenuName}
+                      onChange={(e) => setEditingMenuName(e.target.value)}
+                      className="rounded border border-slate-300 bg-white px-1 py-0.5 text-xs text-slate-900"
+                    />
+                    <button type="submit" disabled={updateMenuM.isPending} className="font-bold text-emerald-700" title="Save">✓</button>
+                    <button type="button" onClick={() => setEditingMenuId(null)} className="text-slate-500" title="Cancel">✕</button>
+                  </form>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => {
+                        setSelectedMenuId(menu.id);
+                        setSelectedSectionId(null);
+                        setSelectedDishId(null);
+                      }}
+                      className="flex-1 text-left"
+                    >
+                      {menu.name}
+                      {menu.isPublished ? (
+                        <span
+                          className={`ml-0.5 ${selectedMenuId === menu.id ? "text-emerald-300" : "text-emerald-600"}`}
+                          title="Published"
+                        >
+                          ●
+                        </span>
+                      ) : null}
+                    </button>
+                    {canEditMenu && (
+                      <>
+                        <button
+                          onClick={() => {
+                            setEditingMenuId(menu.id);
+                            setEditingMenuName(menu.name);
+                          }}
+                          className={`hover:opacity-70 ${selectedMenuId === menu.id ? "text-slate-300" : "text-slate-500"}`}
+                          title="Rename menu"
+                        >
+                          ✏
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (!canDeleteMenu(menu.id)) {
+                              openConfirm({
+                                title: "Cannot delete menu",
+                                message: "This menu still has sections. Remove all sections before deleting the menu.",
+                                confirmLabel: "OK",
+                                onConfirm: () => {}
+                              });
+                              return;
+                            }
+                            openConfirm({
+                              title: "Delete menu",
+                              message: `Delete "${menu.name}"? This cannot be undone.`,
+                              confirmLabel: "Delete",
+                              destructive: true,
+                              onConfirm: () => deleteMenuM.mutate(menu.id)
+                            });
+                          }}
+                          disabled={deleteMenuM.isPending}
+                          className={`text-red-700 hover:font-bold ${selectedMenuId === menu.id ? "text-red-300" : ""}`}
+                          title="Delete menu"
+                        >
+                          ✕
+                        </button>
+                      </>
+                    )}
+                  </>
                 )}
               </div>
             ))}
@@ -437,7 +608,7 @@ export function MenuBuilderPage() {
                 <Button
                   type="button"
                   size="sm"
-                  onClick={() => updateMenuM.mutate({ isPublished: true })}
+                  onClick={() => updateMenuM.mutate({ input: { isPublished: true } })}
                   disabled={updateMenuM.isPending}
                 >
                   {updateMenuM.isPending ? "Publishing…" : "Publish menu"}
@@ -447,7 +618,7 @@ export function MenuBuilderPage() {
                   type="button"
                   size="sm"
                   variant="outline"
-                  onClick={() => updateMenuM.mutate({ isPublished: false })}
+                  onClick={() => updateMenuM.mutate({ input: { isPublished: false } })}
                   disabled={updateMenuM.isPending}
                 >
                   {updateMenuM.isPending ? "Updating…" : "Unpublish"}
@@ -480,30 +651,75 @@ export function MenuBuilderPage() {
                   key={section.id}
                   className={`rounded border px-2 py-1 text-xs flex items-center gap-1 ${selectedSectionId === section.id ? "bg-slate-900 text-white" : "bg-white"}`}
                 >
-                  <button
-                    onClick={() => {
-                      setSelectedSectionId(section.id);
-                      setSelectedDishId(null);
-                    }}
-                    className="flex-1 text-left"
-                  >
-                    {section.name}
-                  </button>
-                  {canEditMenu && (
-                    <button
-                      onClick={() => {
-                        if (!canDelete) {
-                          alert("Remove all dishes in this section before deleting it.");
-                          return;
-                        }
-                        if (confirm("Delete this section?")) deleteSectionM.mutate(section.id);
+                  {editingSectionId === section.id ? (
+                    <form
+                      className="flex items-center gap-1"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        if (!editingSectionName.trim()) return;
+                        updateSectionM.mutate({ sectionId: section.id, name: editingSectionName.trim() });
                       }}
-                      disabled={deleteSectionM.isPending || !canDelete}
-                      className={`text-red-700 hover:font-bold disabled:opacity-50 disabled:cursor-not-allowed ${selectedSectionId === section.id ? "text-red-300" : ""}`}
-                      title={canDelete ? "Delete section" : "Remove all dishes first"}
                     >
-                      ✕
-                    </button>
+                      <input
+                        autoFocus
+                        value={editingSectionName}
+                        onChange={(e) => setEditingSectionName(e.target.value)}
+                        className="rounded border border-slate-300 bg-white px-1 py-0.5 text-xs text-slate-900"
+                      />
+                      <button type="submit" disabled={updateSectionM.isPending} className="font-bold text-emerald-700" title="Save">✓</button>
+                      <button type="button" onClick={() => setEditingSectionId(null)} className="text-slate-500" title="Cancel">✕</button>
+                    </form>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => {
+                          setSelectedSectionId(section.id);
+                          setSelectedDishId(null);
+                        }}
+                        className="flex-1 text-left"
+                      >
+                        {section.name}
+                      </button>
+                      {canEditMenu && (
+                        <>
+                          <button
+                            onClick={() => {
+                              setEditingSectionId(section.id);
+                              setEditingSectionName(section.name);
+                            }}
+                            className={`hover:opacity-70 ${selectedSectionId === section.id ? "text-slate-300" : "text-slate-500"}`}
+                            title="Rename section"
+                          >
+                            ✏
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (!canDelete) {
+                                openConfirm({
+                                  title: "Cannot delete section",
+                                  message: "This section still has dishes. Remove all dishes before deleting this section.",
+                                  confirmLabel: "OK",
+                                  onConfirm: () => {}
+                                });
+                                return;
+                              }
+                              openConfirm({
+                                title: "Delete section",
+                                message: `Delete section "${section.name}"? This cannot be undone.`,
+                                confirmLabel: "Delete",
+                                destructive: true,
+                                onConfirm: () => deleteSectionM.mutate(section.id)
+                              });
+                            }}
+                            disabled={deleteSectionM.isPending}
+                            className={`text-red-700 hover:font-bold disabled:opacity-50 disabled:cursor-not-allowed ${selectedSectionId === section.id ? "text-red-300" : ""}`}
+                            title={canDelete ? "Delete section" : "Remove all dishes first"}
+                          >
+                            ✕
+                          </button>
+                        </>
+                      )}
+                    </>
                   )}
                 </div>
               );
@@ -546,9 +762,15 @@ export function MenuBuilderPage() {
                 </button>
                 {canEditMenu && (
                   <button
-                    onClick={() => {
-                      if (confirm("Delete this dish?")) deleteDishM.mutate(dish.id);
-                    }}
+                    onClick={() =>
+                      openConfirm({
+                        title: "Delete dish",
+                        message: `Delete "${dish.name}"? This cannot be undone.`,
+                        confirmLabel: "Delete",
+                        destructive: true,
+                        onConfirm: () => deleteDishM.mutate(dish.id)
+                      })
+                    }
                     disabled={deleteDishM.isPending}
                     className={`text-red-700 hover:font-bold ${selectedDishId === dish.id ? "text-red-300" : ""}`}
                     title="Delete dish"
@@ -563,22 +785,59 @@ export function MenuBuilderPage() {
             <div className="mt-3 space-y-3 border-t border-slate-200 pt-3">
               {canEditMenu && (
                 <div className="rounded bg-slate-50 p-3">
-                  <p className="mb-2 text-xs font-medium text-slate-800">Dish description</p>
+                  <p className="mb-2 text-xs font-medium text-slate-800">Dish details</p>
                   {editingDishId === selectedDishId ? (
                     <form
                       className="space-y-2"
                       onSubmit={(e) => {
                         e.preventDefault();
-                        updateDishM.mutate({ description: editingDishDescription });
+                        updateDishM.mutate({
+                          name: editingDishName,
+                          price: editingDishPrice,
+                          description: editingDishDescription,
+                          isAvailable: editingDishAvailable
+                        });
                       }}
                     >
-                      <textarea
-                        value={editingDishDescription}
-                        onChange={(e) => setEditingDishDescription(e.target.value)}
-                        placeholder="Add a description..."
-                        className="w-full rounded border border-slate-200 px-2 py-1 text-xs"
-                        rows={3}
-                      />
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <div>
+                          <label className="mb-0.5 block text-[11px] text-slate-500">Name</label>
+                          <input
+                            value={editingDishName}
+                            onChange={(e) => setEditingDishName(e.target.value)}
+                            required
+                            className="w-full rounded border border-slate-200 px-2 py-1 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-0.5 block text-[11px] text-slate-500">Price</label>
+                          <input
+                            value={editingDishPrice}
+                            onChange={(e) => setEditingDishPrice(e.target.value)}
+                            required
+                            className="w-full rounded border border-slate-200 px-2 py-1 text-xs"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="mb-0.5 block text-[11px] text-slate-500">Description</label>
+                        <textarea
+                          value={editingDishDescription}
+                          onChange={(e) => setEditingDishDescription(e.target.value)}
+                          placeholder="Add a description..."
+                          className="w-full rounded border border-slate-200 px-2 py-1 text-xs"
+                          rows={3}
+                        />
+                      </div>
+                      <label className="flex items-center gap-2 text-xs text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={editingDishAvailable}
+                          onChange={(e) => setEditingDishAvailable(e.target.checked)}
+                          className="rounded"
+                        />
+                        Available
+                      </label>
                       <div className="flex gap-1">
                         <button
                           type="submit"
@@ -597,18 +856,32 @@ export function MenuBuilderPage() {
                       </div>
                     </form>
                   ) : (
-                    <div>
-                      <p className="mb-2 whitespace-pre-wrap text-xs text-slate-700">
-                        {selectedDish?.description || <span className="italic text-slate-500">No description</span>}
+                    <div className="space-y-1">
+                      <div className="grid gap-1 text-xs sm:grid-cols-2">
+                        <p><span className="text-slate-500">Name: </span>{selectedDish?.name}</p>
+                        <p><span className="text-slate-500">Price: </span>${selectedDish?.price}</p>
+                        <p>
+                          <span className="text-slate-500">Available: </span>
+                          <span className={selectedDish?.isAvailable ? "text-emerald-700" : "text-amber-700"}>
+                            {selectedDish?.isAvailable ? "Yes" : "No"}
+                          </span>
+                        </p>
+                      </div>
+                      <p className="whitespace-pre-wrap text-xs text-slate-700">
+                        <span className="text-slate-500">Description: </span>
+                        {selectedDish?.description || <span className="italic text-slate-500">None</span>}
                       </p>
                       <button
                         onClick={() => {
                           setEditingDishId(selectedDishId);
-                          setEditingDishDescription(selectedDish?.description || "");
+                          setEditingDishName(selectedDish?.name ?? "");
+                          setEditingDishPrice(selectedDish?.price ?? "");
+                          setEditingDishDescription(selectedDish?.description ?? "");
+                          setEditingDishAvailable(selectedDish?.isAvailable ?? true);
                         }}
                         className="text-xs text-blue-600 hover:underline"
                       >
-                        Edit
+                        Edit dish
                       </button>
                     </div>
                   )}
@@ -699,7 +972,15 @@ export function MenuBuilderPage() {
                             variant="outline"
                             className="h-7 border-red-200 text-xs text-red-700 hover:bg-red-50"
                             disabled={dishGalleryBusy}
-                            onClick={() => deleteDishMediaM.mutate(m.id)}
+                            onClick={() =>
+                              openConfirm({
+                                title: "Remove media",
+                                message: `Remove this ${m.kind} from the dish gallery?`,
+                                confirmLabel: "Remove",
+                                destructive: true,
+                                onConfirm: () => deleteDishMediaM.mutate(m.id)
+                              })
+                            }
                           >
                             Remove
                           </Button>
@@ -711,6 +992,105 @@ export function MenuBuilderPage() {
               ) : (
                 <p className="text-xs text-slate-500">No gallery items yet.</p>
               )}
+
+              {/* Translations */}
+              <div className="border-t border-slate-200 pt-3">
+                <p className="mb-2 text-xs font-medium text-slate-800">Translations</p>
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Add translated name and description for each locale (BCP-47, e.g.{" "}
+                  <code className="rounded bg-slate-100 px-1">fr</code>,{" "}
+                  <code className="rounded bg-slate-100 px-1">vi</code>,{" "}
+                  <code className="rounded bg-slate-100 px-1">zh-Hant</code>). The default language stays in the
+                  root dish record as a fallback.
+                </p>
+                {dishTranslationsQ.data && dishTranslationsQ.data.length > 0 && (
+                  <ul className="mb-3 space-y-1">
+                    {dishTranslationsQ.data.map((t) => (
+                      <li
+                        key={t.locale}
+                        className="flex flex-wrap items-start justify-between gap-1 rounded border border-slate-100 bg-slate-50 px-2 py-1.5 text-xs"
+                      >
+                        <div className="min-w-0">
+                          <span className="mr-1.5 rounded bg-slate-200 px-1 py-0.5 font-mono text-[11px] font-semibold text-slate-700">
+                            {t.locale}
+                          </span>
+                          <span className="font-medium text-slate-900">{t.name}</span>
+                          {t.description && (
+                            <p className="mt-0.5 text-[11px] text-slate-500">{t.description}</p>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            openConfirm({
+                              title: "Delete translation",
+                              message: `Remove the "${t.locale}" translation for this dish?`,
+                              confirmLabel: "Delete",
+                              destructive: true,
+                              onConfirm: () => deleteDishTranslationM.mutate(t.locale)
+                            })
+                          }
+                          className="text-red-600 hover:text-red-800 disabled:opacity-50"
+                          disabled={deleteDishTranslationM.isPending}
+                        >
+                          ✕
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <form
+                  className="space-y-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!translationLocale.trim() || !translationName.trim()) return;
+                    upsertDishTranslationM.mutate({
+                      locale: translationLocale.trim(),
+                      name: translationName.trim(),
+                      description: translationDescription.trim() || null
+                    });
+                  }}
+                >
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <div>
+                      <label className="mb-0.5 block text-[11px] text-slate-500">Locale</label>
+                      <Input
+                        value={translationLocale}
+                        onChange={(e) => setTranslationLocale(e.target.value)}
+                        placeholder="fr"
+                        className="h-7 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-0.5 block text-[11px] text-slate-500">Name</label>
+                      <Input
+                        value={translationName}
+                        onChange={(e) => setTranslationName(e.target.value)}
+                        placeholder="Translated name"
+                        className="h-7 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-0.5 block text-[11px] text-slate-500">Description</label>
+                      <Input
+                        value={translationDescription}
+                        onChange={(e) => setTranslationDescription(e.target.value)}
+                        placeholder="Optional"
+                        className="h-7 text-xs"
+                      />
+                    </div>
+                  </div>
+                  {translationError && <p className="text-xs text-red-600">{translationError}</p>}
+                  <Button
+                    type="submit"
+                    size="sm"
+                    className="h-7 text-xs"
+                    disabled={upsertDishTranslationM.isPending || !translationLocale.trim() || !translationName.trim()}
+                  >
+                    {upsertDishTranslationM.isPending ? "Saving…" : "Save translation"}
+                  </Button>
+                </form>
+              </div>
             </div>
           )}
         </CardContent>
@@ -721,53 +1101,6 @@ export function MenuBuilderPage() {
           <CardTitle>Tag ingredients {selectedDish ? `for ${selectedDish.name}` : ""}</CardTitle>
         </CardHeader>
         <CardContent>
-          {Number.isFinite(restaurantId) && restaurantId > 0 && (
-            <div className="mb-4 rounded border border-dashed border-slate-300 bg-slate-50/80 p-3">
-              <p className="text-xs font-medium text-slate-800">Request a new ingredient</p>
-              <p className="mb-2 text-xs text-muted-foreground">
-                Adds a pending entry. It does not appear in the global dictionary until a platform admin approves. Until
-                then, only this restaurant can search and tag it.
-              </p>
-              <form
-                className="flex flex-wrap items-end gap-2"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  setRequestIngredientError(null);
-                  if (!requestIngredientName.trim()) return;
-                  requestIngredientM.mutate(requestIngredientPhotos);
-                }}
-              >
-                <Input
-                  className="max-w-xs flex-1"
-                  value={requestIngredientName}
-                  onChange={(e) => setRequestIngredientName(e.target.value)}
-                  placeholder="e.g. Urfa pepper"
-                  autoComplete="off"
-                />
-                <label className="flex max-w-[min(100%,14rem)] shrink-0 flex-col gap-0.5 text-xs text-slate-600">
-                  <span className="whitespace-nowrap">Photos / videos</span>
-                  <input
-                    type="file"
-                    multiple
-                    accept={GALLERY_MEDIA_ACCEPT}
-                    className="max-w-full"
-                    disabled={requestIngredientM.isPending}
-                    onChange={(e) => {
-                      setRequestIngredientPhotos(Array.from(e.target.files ?? []));
-                      e.target.value = "";
-                    }}
-                  />
-                  <span className="text-[10px] leading-tight text-muted-foreground">{GALLERY_MULTI_FILE_HINT}</span>
-                </label>
-                <Button type="submit" disabled={requestIngredientM.isPending || !requestIngredientName.trim()}>
-                  {requestIngredientM.isPending ? "Submitting…" : "Submit request"}
-                </Button>
-              </form>
-              {requestIngredientError && (
-                <p className="mt-2 text-xs text-red-600">{requestIngredientError}</p>
-              )}
-            </div>
-          )}
           <Input
             value={ingredientQuery}
             onChange={(e) => setIngredientQuery(e.target.value)}
@@ -789,6 +1122,58 @@ export function MenuBuilderPage() {
                   </span>
                 ))}
               </div>
+              {ingredientQuery.trim().length >= 1 &&
+                ingredientsQ.isFetched &&
+                !ingredientsQ.isFetching &&
+                (ingredientsQ.data?.length ?? 0) === 0 &&
+                Number.isFinite(restaurantId) &&
+                restaurantId > 0 && (
+                  <div className="mt-3 rounded border border-dashed border-slate-300 bg-slate-50/80 p-3">
+                    <p className="text-xs font-medium text-slate-800">No results found</p>
+                    <p className="mb-2 text-xs text-muted-foreground">
+                      "{ingredientQuery}" is not in the dictionary yet. Request it below — it will be available for this
+                      restaurant immediately and added to the global dictionary once a platform admin approves it.
+                    </p>
+                    <form
+                      className="flex flex-wrap items-end gap-2"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        setRequestIngredientError(null);
+                        if (!requestIngredientName.trim()) return;
+                        requestIngredientM.mutate(requestIngredientPhotos);
+                      }}
+                    >
+                      <Input
+                        className="max-w-xs flex-1"
+                        value={requestIngredientName}
+                        onChange={(e) => setRequestIngredientName(e.target.value)}
+                        placeholder="Ingredient name"
+                        autoComplete="off"
+                      />
+                      <label className="flex max-w-[min(100%,14rem)] shrink-0 flex-col gap-0.5 text-xs text-slate-600">
+                        <span className="whitespace-nowrap">Photos / videos (optional)</span>
+                        <input
+                          type="file"
+                          multiple
+                          accept={GALLERY_MEDIA_ACCEPT}
+                          className="max-w-full"
+                          disabled={requestIngredientM.isPending}
+                          onChange={(e) => {
+                            setRequestIngredientPhotos(Array.from(e.target.files ?? []));
+                            e.target.value = "";
+                          }}
+                        />
+                        <span className="text-[10px] leading-tight text-muted-foreground">{GALLERY_MULTI_FILE_HINT}</span>
+                      </label>
+                      <Button type="submit" disabled={requestIngredientM.isPending || !requestIngredientName.trim()}>
+                        {requestIngredientM.isPending ? "Submitting…" : "Request ingredient"}
+                      </Button>
+                    </form>
+                    {requestIngredientError && (
+                      <p className="mt-2 text-xs text-red-600">{requestIngredientError}</p>
+                    )}
+                  </div>
+                )}
               <div className="mt-3 space-y-2">
                 {ingredientsQ.data?.slice(0, 8).map((ingredient) => {
                   const sortedIngMedia = [...(ingredient.media ?? [])].sort(
@@ -880,9 +1265,16 @@ export function MenuBuilderPage() {
                                         className="h-6 border-red-200 text-[11px] text-red-700 hover:bg-red-50"
                                         disabled={ingredientMediaBusy}
                                         onClick={() =>
-                                          deleteIngredientMediaM.mutate({
-                                            ingredientId: ingredient.id,
-                                            mediaId: m.id
+                                          openConfirm({
+                                            title: "Remove media",
+                                            message: `Remove this ${m.kind} from the ingredient gallery?`,
+                                            confirmLabel: "Remove",
+                                            destructive: true,
+                                            onConfirm: () =>
+                                              deleteIngredientMediaM.mutate({
+                                                ingredientId: ingredient.id,
+                                                mediaId: m.id
+                                              })
                                           })
                                         }
                                       >

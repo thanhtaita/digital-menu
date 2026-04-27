@@ -25,7 +25,17 @@ vi.mock("../lib/api-client", () => ({
   apiRequestIngredient: vi.fn(),
   apiListDishIngredients: vi.fn(),
   apiAddDishIngredient: vi.fn(),
-  apiRemoveDishIngredient: vi.fn()
+  apiRemoveDishIngredient: vi.fn(),
+  apiUploadDishMedia: vi.fn(),
+  apiDeleteDishMedia: vi.fn(),
+  apiReorderDishMedia: vi.fn(),
+  apiUploadIngredientMedia: vi.fn(),
+  apiDeleteIngredientMedia: vi.fn(),
+  apiReorderIngredientMedia: vi.fn()
+}));
+
+vi.mock("@/auth-context", () => ({
+  useAuth: () => ({ user: null, setUser: vi.fn(), loading: false })
 }));
 
 describe("MenuBuilderPage", () => {
@@ -46,7 +56,8 @@ describe("MenuBuilderPage", () => {
         price: "10.00",
         imageUrl: null,
         isAvailable: true,
-        displayOrder: 0
+        displayOrder: 0,
+        media: []
       }
     ]);
     (apiListDishIngredients as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([]);
@@ -57,7 +68,8 @@ describe("MenuBuilderPage", () => {
         slug: "garlic",
         isCommonAllergen: false,
         approvalStatus: "approved",
-        requestedByRestaurantId: null
+        requestedByRestaurantId: null,
+        media: []
       }
     ]);
     (apiAddDishIngredient as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
