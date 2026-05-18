@@ -50,6 +50,14 @@ What **guests** get on the public Next.js site. API contract: `GET /public/resta
 - **Add** a restriction: choose type (`allergy` / `dislike` → search ingredient by name; `diet` → select from preset diet types). Severity auto-set or selectable (`block` / `warn`).
 - **Remove** any restriction immediately.
 
+## Taste preferences (`/profile` — Preferences section)
+
+- **Auto-generates** a preference text from the user's saved dietary restrictions (diet type, allergies, dislikes).
+- **Editable textarea** lets users append personal notes (e.g. "I love spicy food and prefer small plates") on top of the auto-generated summary. Min 10 / max 2000 characters.
+- **Save / Update / Remove** via `PUT /users/me/preferences` and `DELETE /users/me/preferences`.
+- Stored `preferenceText` feeds the semantic recommendation embedding pipeline.
+- "Refresh from restrictions" button regenerates the auto-summary when restrictions have changed.
+
 ## Restriction engine and dish badges
 
 - On `/r/[slug]`, when logged in, each dish is evaluated against the user's allergy/dislike restrictions.
@@ -57,6 +65,11 @@ What **guests** get on the public Next.js site. API contract: `GET /public/resta
 - **Warned 2dish** (contains a `warn`-severity ingredient): card highlighted amber + "Contains disliked ingredient" badge.
 - **Ingredient pills** that match a restriction are highlighted red for quick identification.
 - Diet-type restrictions are stored on the profile but not yet applied to dish filtering (Phase 2).
+
+## Semantic recommendations (API ready, UI not yet built)
+
+- **API endpoints exist** for personalized dish recommendations based on free-text preference descriptions (e.g. "I love spicy Thai food"). See `IMPLEMENTED_ROUTES.md` for `GET /users/me/recommendations` and related routes.
+- **UI not yet implemented** — a future "For You" page or widget will call these endpoints to surface ranked dishes per user.
 
 ## Not implemented here (see `PROGRESS.md`)
 

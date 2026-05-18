@@ -1,6 +1,11 @@
-import type { RestrictionResponse, CreateRestriction } from "@digital-menu/shared";
+import type {
+  RestrictionResponse,
+  CreateRestriction,
+  UserPreferenceResponse,
+} from "@digital-menu/shared";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3002/api/v1";
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3002/api/v1";
 
 export type CurrentUser = {
   id: number;
@@ -16,9 +21,9 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     credentials: "include",
     headers: {
       ...(hasBody ? { "Content-Type": "application/json" } : {}),
-      ...(options.headers ?? {})
+      ...(options.headers ?? {}),
     },
-    ...options
+    ...options,
   });
   const text = await res.text();
   const data = text ? (JSON.parse(text) as unknown) : null;
@@ -36,8 +41,14 @@ export async function apiMe(): Promise<CurrentUser | null> {
   }
 }
 
-export async function apiLogin(email: string, password: string): Promise<{ user: CurrentUser }> {
-  return request("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
+export async function apiLogin(
+  email: string,
+  password: string,
+): Promise<{ user: CurrentUser }> {
+  return request("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
 }
 
 export async function apiRegister(input: {
@@ -45,7 +56,10 @@ export async function apiRegister(input: {
   password: string;
   displayName?: string;
 }): Promise<{ user: CurrentUser }> {
-  return request("/auth/register", { method: "POST", body: JSON.stringify(input) });
+  return request("/auth/register", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
 
 export async function apiLogout(): Promise<void> {
@@ -53,15 +67,22 @@ export async function apiLogout(): Promise<void> {
 }
 
 export async function apiGetRestrictions(): Promise<RestrictionResponse[]> {
-  const res = await request<{ restrictions: RestrictionResponse[] }>("/users/me/restrictions");
+  const res = await request<{ restrictions: RestrictionResponse[] }>(
+    "/users/me/restrictions",
+  );
   return res.restrictions;
 }
 
-export async function apiAddRestriction(input: CreateRestriction): Promise<RestrictionResponse> {
-  const res = await request<{ restriction: RestrictionResponse }>("/users/me/restrictions", {
-    method: "POST",
-    body: JSON.stringify(input)
-  });
+export async function apiAddRestriction(
+  input: CreateRestriction,
+): Promise<RestrictionResponse> {
+  const res = await request<{ restriction: RestrictionResponse }>(
+    "/users/me/restrictions",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  );
   return res.restriction;
 }
 
@@ -69,9 +90,34 @@ export async function apiDeleteRestriction(id: number): Promise<void> {
   await request(`/users/me/restrictions/${id}`, { method: "DELETE" });
 }
 
-export async function apiSearchIngredients(q: string): Promise<{ id: number; canonicalName: string; slug: string }[]> {
-  const res = await request<{ id: number; canonicalName: string; slug: string }[]>(
-    `/ingredients?q=${encodeURIComponent(q)}`
-  );
+export async function apiSearchIngredients(
+  q: string,
+): Promise<{ id: number; canonicalName: string; slug: string }[]> {
+  const res = await request<
+    { id: number; canonicalName: string; slug: string }[]
+  >(`/ingredients?q=${encodeURIComponent(q)}`);
   return Array.isArray(res) ? res : [];
+}
+
+export async function apiGetPreferences(): Promise<UserPreferenceResponse | null> {
+  try {
+    const res = await request<{ preference: UserPreferenceResponse }>("/users/me/preferences");
+    return res.preference;
+  } catch (err) {
+    const e = err as { status?: number };
+    if (e.status === 404) return null;
+    throw err;
+  }
+}
+
+export async function apiUpsertPreferences(preferenceText: string): Promise<UserPreferenceResponse> {
+  const res = await request<{ preference: UserPreferenceResponse }>("/users/me/preferences", {
+    method: "PUT",
+    body: JSON.stringify({ preferenceText }),
+  });
+  return res.preference;
+}
+
+export async function apiDeletePreferences(): Promise<void> {
+  await request("/users/me/preferences", { method: "DELETE" });
 }

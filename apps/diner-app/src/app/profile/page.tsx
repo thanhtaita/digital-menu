@@ -2,12 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { RestrictionResponse } from "@digital-menu/shared";
+import type { RestrictionResponse, UserPreferenceResponse } from "@digital-menu/shared";
 import { useAuth } from "@/lib/auth-context";
 import {
   apiAddRestriction,
   apiDeleteRestriction,
-  apiSearchIngredients
+  apiSearchIngredients,
+  apiGetPreferences,
+  apiUpsertPreferences,
+  apiDeletePreferences,
 } from "@/lib/api-client";
 import { SiteHeader } from "@/components/site-header";
 
@@ -68,6 +71,8 @@ export default function ProfilePage() {
 
             <AddRestrictionForm onAdded={refresh} />
           </section>
+
+          <PreferencesSection restrictions={restrictions} />
         </div>
       </main>
     </div>
@@ -128,6 +133,162 @@ function RestrictionList({
         </li>
       ))}
     </ul>
+  );
+}
+
+function buildPreferenceText(restrictions: RestrictionResponse[], notes: string): string {
+  const parts: string[] = [];
+  const diets = restrictions
+    .filter((r) => r.restrictionType === "diet")
+    .map((r) => DIET_LABELS[r.dietType ?? ""] ?? r.dietType);
+  const allergies = restrictions
+    .filter((r) => r.restrictionType === "allergy")
+    .map((r) => r.ingredient?.canonicalName ?? `ingredient #${r.ingredientId}`);
+  const dislikes = restrictions
+    .filter((r) => r.restrictionType === "dislike")
+    .map((r) => r.ingredient?.canonicalName ?? `ingredient #${r.ingredientId}`);
+
+  if (diets.length) parts.push(`I follow a ${diets.join(", ")} diet.`);
+  if (allergies.length) parts.push(`I am allergic to: ${allergies.join(", ")}.`);
+  if (dislikes.length) parts.push(`I dislike: ${dislikes.join(", ")}.`);
+  if (notes.trim()) parts.push(notes.trim());
+
+  return parts.join(" ");
+}
+
+function PreferencesSection({ restrictions }: { restrictions: RestrictionResponse[] }) {
+  const [existing, setExisting] = useState<UserPreferenceResponse | null | undefined>(undefined);
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    apiGetPreferences().then((pref) => {
+      setExisting(pref);
+      if (pref) {
+        setNotes(pref.preferenceText);
+      }
+    }).catch(() => setExisting(null));
+  }, []);
+
+  const combinedText = existing !== undefined && !existing
+    ? buildPreferenceText(restrictions, notes)
+    : notes;
+
+  const charCount = combinedText.length;
+  const isValid = charCount >= 10 && charCount <= 2000;
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!isValid) return;
+    setSaving(true);
+    setError(null);
+    setSaved(false);
+    try {
+      const pref = await apiUpsertPreferences(combinedText);
+      setExisting(pref);
+      setNotes(pref.preferenceText);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch {
+      setError("Failed to save preferences.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    setDeleting(true);
+    setError(null);
+    try {
+      await apiDeletePreferences();
+      setExisting(null);
+      setNotes("");
+    } catch {
+      setError("Failed to delete preferences.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  function handleRefresh() {
+    setNotes(buildPreferenceText(restrictions, ""));
+  }
+
+  if (existing === undefined) return null;
+
+  return (
+    <section>
+      <h2 className="text-lg font-medium text-stone-900">Taste preferences</h2>
+      <p className="mt-1 text-sm text-stone-500">
+        Used to surface personalised dish recommendations. Your dietary restrictions are
+        included automatically — add any extra notes about your tastes.
+      </p>
+
+      <form onSubmit={handleSave} className="mt-4 space-y-3">
+        {error && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+
+        {!existing && (
+          <div className="rounded-lg border border-stone-200 bg-stone-50 p-3">
+            <p className="text-xs font-medium text-stone-500 mb-1">Auto-generated from your restrictions</p>
+            <p className="text-sm text-stone-700 leading-relaxed">
+              {buildPreferenceText(restrictions, "") || <span className="italic text-stone-400">No restrictions set yet.</span>}
+            </p>
+            {restrictions.length > 0 && (
+              <button
+                type="button"
+                onClick={handleRefresh}
+                className="mt-2 text-xs text-stone-500 hover:text-stone-800 underline"
+              >
+                Refresh from restrictions
+              </button>
+            )}
+          </div>
+        )}
+
+        <div>
+          <label className="mb-1 block text-xs text-stone-500">
+            {existing ? "Preference text" : "Additional notes (optional)"}
+          </label>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={5}
+            maxLength={2000}
+            placeholder={existing ? "" : "e.g. I love spicy food and prefer lighter dishes for lunch…"}
+            className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm focus:border-stone-500 focus:outline-none resize-none"
+          />
+          <p className={`mt-1 text-right text-xs ${charCount > 2000 ? "text-red-600" : "text-stone-400"}`}>
+            {combinedText.length} / 2000
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            type="submit"
+            disabled={saving || !isValid}
+            className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700 disabled:opacity-50"
+          >
+            {saving ? "Saving…" : existing ? "Update" : "Save"}
+          </button>
+
+          {existing && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={deleting}
+              className="text-sm text-stone-400 hover:text-red-600 disabled:opacity-50"
+            >
+              {deleting ? "Removing…" : "Remove"}
+            </button>
+          )}
+
+          {saved && <span className="text-sm text-green-600">Saved!</span>}
+        </div>
+      </form>
+    </section>
   );
 }
 
