@@ -1,0 +1,45 @@
+---
+description: Drizzle schema and migration workflow — never hand-write migration files
+globs: packages/db/**/*
+alwaysApply: false
+---
+
+# Drizzle migrations
+
+## Never do this
+
+- Do **not** hand-write `packages/db/drizzle/*.sql` migration files.
+- Do **not** manually edit `packages/db/drizzle/meta/_journal.json` or snapshot JSON files.
+- Do **not** run raw `CREATE TABLE` SQL in pgAdmin/psql when a Drizzle migration covers the same change.
+
+Hand-written migrations break `drizzle.__drizzle_migrations` tracking. A prior migration can fail silently and block later ones (e.g. `0007` stuck → `0008` never runs).
+
+## Required workflow for new tables/columns
+
+1. Edit `packages/db/src/schema/schema.ts` only.
+2. Generate the migration:
+   ```bash
+   pnpm --filter @digital-menu/db drizzle:generate
+   ```
+3. Commit the **generated** artifacts together:
+   - `packages/db/drizzle/NNNN_*.sql`
+   - `packages/db/drizzle/meta/_journal.json`
+   - any new/updated `packages/db/drizzle/meta/*_snapshot.json` from generate
+4. Tell the user to apply (or run when asked):
+   ```bash
+   pnpm --filter @digital-menu/db drizzle:migrate
+   ```
+5. Verify: new tables exist **and** a new SHA-256 hash row appears in `drizzle.__drizzle_migrations`. Do not trust "migrations applied successfully" alone.
+
+## Definition of done
+
+Schema work is incomplete until migrate has been run against the same `DATABASE_URL` the API uses (`packages/db/drizzle.config.ts` default: `postgres://postgres:123456@localhost:5433/digital_menu`).
+
+## If tracking is already broken (local dev)
+
+```bash
+pnpm --filter @digital-menu/db db:reset
+pnpm --filter @digital-menu/seed seed   # optional
+```
+
+See `SETUP.md` § Reset.

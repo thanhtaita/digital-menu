@@ -1,0 +1,44 @@
+# Libraries
+
+- `src\app.ts` — function buildApp: () => void
+- `src\lib\auth.ts`
+  - function hashPassword: (password) => Promise<string>
+  - function verifyPassword: (password, hash) => Promise<boolean>
+  - function createSessionId: () => string
+  - function createSession: (userId) => Promise<string>
+  - function getSession: (sessionId) => Promise<
+  - function deleteSession: (sessionId) => Promise<void>
+  - _...4 more_
+- `src\lib\restaurant-access.ts`
+  - function getRestaurantIdsManagedByUser: (userId) => Promise<number[]>
+  - function canUserManageRestaurant: (userId, restaurantId) => Promise<boolean>
+  - function canUserManageRestaurantWithRole: (userId, role, restaurantId) => Promise<boolean>
+- `src\lib\uploads.ts`
+  - function getUploadRoot: () => string
+  - function ensureUploadRoot: () => Promise<void>
+  - function extForImageMime: (mime) => string | undefined
+  - function mediaKindFromMime: (mime) => MediaKind | undefined
+  - function publicMediaPath: (subdir, filename) => string
+  - function deleteLocalUploadByPublicUrl: (publicUrl) => Promise<void>
+  - _...11 more_
+- `src\middleware\auth.ts`
+  - function requireAuth: (request, reply) => Promise<
+  - function getOptionalUser: (request) => AuthUser | null
+  - type AuthUser
+- `src\routes\ai-suggestions.ts` — function aiSuggestionRoutes: (app) => void
+- `src\routes\auth.ts` — function authRoutes: (app) => void
+- `src\routes\dish-ingredients.ts` — function dishIngredientRoutes: (app) => void
+- `src\routes\dishes.ts` — function dishRoutes: (app) => void
+- `src\routes\health.ts` — function healthRoutes: (app) => void
+- `src\routes\ingredients.ts` — function ingredientRoutes: (app) => void
+- `src\routes\menus.ts` — function menuRoutes: (app) => void
+- `src\routes\public-menu.ts` — function publicMenuRoutes: (app) => void
+- `src\routes\qr.ts` — function qrRoutes: (app) => void
+- `src\routes\restaurants.ts` — function restaurantRoutes: (app) => void
+- `src\routes\restrictions.ts` — function restrictionRoutes: (app) => void
+- `src\routes\sections.ts` — function sectionRoutes: (app) => void
+- `src\services\ai-ingredient-suggestion.ts`
+  - function suggestIngredients: (params) => Promise<SuggestIngredientsResult>
+  - type MatchedIngredient
+  - type IngredientSuggestionResult
+  - type SuggestIngredientsResult

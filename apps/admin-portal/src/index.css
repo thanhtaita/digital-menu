@@ -1,8 +1,55 @@
 @import "tailwindcss";
 
-@layer base {
-  body {
-    @apply bg-slate-50 text-slate-900;
-  }
+:root {
+  /* Surfaces */
+  --bg: #f7f7f9;
+  --surface: #ffffff;
+  --surfaceAlt: #f3f3f6;
+  --surfaceSunken: #eaeaed;
+  --hover: #ededf0;
+
+  /* Text */
+  --ink: #111118;
+  --inkMuted: #52525e;
+  --inkFaint: #8e8e9e;
+  --inkSoft: #b4b4c4;
+
+  /* Borders */
+  --rule: #e4e4eb;
+  --ruleStrong: #c8c8d4;
+
+  /* Accent — indigo */
+  --accent: oklch(0.50 0.20 265);
+  --accentSoft: oklch(0.96 0.05 265);
+
+  /* Status */
+  --success: oklch(0.45 0.15 145);
+  --successSoft: oklch(0.96 0.06 145);
+  --warn: oklch(0.52 0.13 75);
+  --warnSoft: oklch(0.97 0.06 75);
+  --danger: oklch(0.52 0.20 25);
+  --dangerSoft: oklch(0.97 0.07 25);
+  --info: oklch(0.52 0.18 240);
+  --infoSoft: oklch(0.96 0.05 240);
+
+  /* Typography */
+  --ui: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+  --display: Georgia, "Times New Roman", serif;
+
+  /* Radii */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(15, 20, 40, 0.06);
+  --shadow-md: 0 4px 12px rgba(15, 20, 40, 0.10);
 }
 
+@layer base {
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--ui);
+  }
+}

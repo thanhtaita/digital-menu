@@ -1,6 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
+import React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -62,7 +63,7 @@ function findAllDishesWithIngredient(
   return results;
 }
 
-export function MenuWithModal({ data }: { data: PublicMenuResponse }) {
+export function MenuWithModal({ data, tabBar }: { data: PublicMenuResponse; tabBar?: React.ReactNode }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { restrictions, user } = useAuth();
@@ -185,6 +186,8 @@ export function MenuWithModal({ data }: { data: PublicMenuResponse }) {
             </Link>
           </div>
         </div>
+
+        {tabBar && <div style={{ maxWidth: 1024, margin: "0 auto", padding: "0 20px" }}>{tabBar}</div>}
 
         {/* Constrained body */}
         <div style={{ maxWidth: 1024, margin: "0 auto", paddingBottom: 40 }}>

@@ -43,13 +43,22 @@ Default in `.env.example`:
 - `DATABASE_URL=postgres://postgres:123456@localhost:5433/digital_menu`
 - `PORT=3001`
 
-### 3. Database: migrate
+### 3. Database: schema changes and migrate
 
-Apply Drizzle migrations (creates tables):
+**Adding tables/columns** (agents and humans): edit `packages/db/src/schema/schema.ts`, then generate — do not hand-write SQL in `packages/db/drizzle/`:
+
+```bash
+pnpm --filter @digital-menu/db drizzle:generate
+pnpm --filter @digital-menu/db drizzle:migrate
+```
+
+**Applying existing migrations** (e.g. after `git pull`):
 
 ```bash
 pnpm --filter @digital-menu/db drizzle:migrate
 ```
+
+After migrate, confirm new tables exist. If migrate says success but tables are missing, a prior migration may be stuck — see **Reset** below or `CLAUDE.md` §7.
 
 ### 4. Seed test data (optional)
 

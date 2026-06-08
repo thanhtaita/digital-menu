@@ -1,4 +1,4 @@
-import { pgTable, serial, text, boolean, integer, numeric, jsonb, timestamp, pgEnum, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, boolean, integer, numeric, jsonb, timestamp, pgEnum, index, uniqueIndex, vector } from "drizzle-orm/pg-core";
 // Enums
 export const userRoleEnum = pgEnum("user_role", ["diner", "restaurant_admin", "superadmin"]);
 export const restrictionTypeEnum = pgEnum("restriction_type", ["allergy", "dislike", "diet"]);
@@ -19,7 +19,8 @@ export const users = pgTable("users", {
     passwordHash: text("password_hash").notNull(),
     role: userRoleEnum("role").notNull().default("diner"),
     displayName: text("display_name"),
-    avatarUrl: text("avatar_url")
+    avatarUrl: text("avatar_url"),
+    bio: text("bio")
 });
 /** Session records for authenticated users. References users; cascade delete when user is removed. */
 export const sessions = pgTable("sessions", {
@@ -215,4 +216,169 @@ export const ingredientTranslations = pgTable("ingredient_translations", {
 }, (table) => ({
     ingredientLocaleUnique: uniqueIndex("ingredient_translations_ingredient_id_locale_unique").on(table.ingredientId, table.locale),
     ingredientIdIdx: index("ingredient_translations_ingredient_id_idx").on(table.ingredientId)
+}));
+/**
+ * Embedding & recommendation layer (Phase 2).
+ * - userPreferences: free-text preference description per user (one row per user).
+ * - dishEmbeddings: 768-dim nomic-embed-text vectors for dishes (written by FastAPI server).
+ * - userPreferenceEmbeddings: 768-dim vectors for user preference texts.
+ * - embeddingJobs: audit log for embedding pipeline runs.
+ * - recommendations: ranked dish results shown to a user in a session.
+ * - recommendationFeedback: click/select/dismiss interactions on recommendations.
+ */
+export const userPreferences = pgTable("user_preferences", {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    preferenceText: text("preference_text").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull()
+}, (table) => ({
+    userIdUnique: uniqueIndex("user_preferences_user_id_unique").on(table.userId)
+}));
+export const dishEmbeddings = pgTable("dish_embeddings", {
+    id: serial("id").primaryKey(),
+    dishId: integer("dish_id").notNull().references(() => dishes.id, { onDelete: "cascade" }),
+    embedding: vector("embedding", { dimensions: 768 }).notNull(),
+    modelName: text("model_name").notNull(),
+    embeddedAt: timestamp("embedded_at").defaultNow().notNull()
+}, (table) => ({
+    dishIdUnique: uniqueIndex("dish_embeddings_dish_id_unique").on(table.dishId),
+    vectorIdx: index("dish_embeddings_vector_idx").on(table.embedding)
+}));
+export const userPreferenceEmbeddings = pgTable("user_preference_embeddings", {
+    id: serial("id").primaryKey(),
+    preferenceId: integer("preference_id").notNull().references(() => userPreferences.id, { onDelete: "cascade" }),
+    embedding: vector("embedding", { dimensions: 768 }).notNull(),
+    modelName: text("model_name").notNull(),
+    embeddedAt: timestamp("embedded_at").defaultNow().notNull()
+}, (table) => ({
+    preferenceIdUnique: uniqueIndex("user_preference_embeddings_preference_id_unique").on(table.preferenceId)
+}));
+export const embeddingJobs = pgTable("embedding_jobs", {
+    id: serial("id").primaryKey(),
+    entityType: text("entity_type").notNull(),
+    entityId: integer("entity_id").notNull(),
+    status: text("status").notNull(),
+    modelName: text("model_name").notNull(),
+    errorMessage: text("error_message"),
+    startedAt: timestamp("started_at").notNull(),
+    completedAt: timestamp("completed_at")
+});
+export const recommendations = pgTable("recommendations", {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    dishId: integer("dish_id").notNull().references(() => dishes.id, { onDelete: "cascade" }),
+    similarityScore: numeric("similarity_score", { precision: 6, scale: 4 }).notNull(),
+    rank: integer("rank").notNull(),
+    sessionId: text("session_id"),
+    shownAt: timestamp("shown_at").defaultNow().notNull()
+});
+export const recommendationFeedback = pgTable("recommendation_feedback", {
+    id: serial("id").primaryKey(),
+    recommendationId: integer("recommendation_id").notNull().references(() => recommendations.id, { onDelete: "cascade" }),
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    action: text("action").notNull(),
+    actionAt: timestamp("action_at").defaultNow().notNull()
+});
+/**
+ * Social layer (Phase 1)
+ * - user_follows: directed follow graph between users.
+ * - posts: user-authored posts, optionally tagged to a restaurant.
+ * - post_media: ordered media gallery for a post.
+ * - post_likes: per-user likes on posts.
+ * - post_comments: threaded comments on posts (one level deep via parentCommentId).
+ */
+export const userFollows = pgTable("user_follows", {
+    id: serial("id").primaryKey(),
+    followerId: integer("follower_id")
+        .notNull()
+        .references(() => users.id, { onDelete: "cascade" }),
+    followingId: integer("following_id")
+        .notNull()
+        .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").defaultNow().notNull()
+}, (table) => ({
+    followerFollowingUnique: uniqueIndex("user_follows_follower_following_unique").on(table.followerId, table.followingId),
+    followerIdIdx: index("user_follows_follower_id_idx").on(table.followerId),
+    followingIdIdx: index("user_follows_following_id_idx").on(table.followingId)
+}));
+export const posts = pgTable("posts", {
+    id: serial("id").primaryKey(),
+    authorId: integer("author_id")
+        .notNull()
+        .references(() => users.id, { onDelete: "cascade" }),
+    restaurantId: integer("restaurant_id").references(() => restaurants.id, { onDelete: "set null" }),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull()
+}, (table) => ({
+    authorIdIdx: index("posts_author_id_idx").on(table.authorId),
+    restaurantIdIdx: index("posts_restaurant_id_idx").on(table.restaurantId),
+    createdAtIdx: index("posts_created_at_idx").on(table.createdAt)
+}));
+export const postMedia = pgTable("post_media", {
+    id: serial("id").primaryKey(),
+    postId: integer("post_id")
+        .notNull()
+        .references(() => posts.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    kind: dishMediaKindEnum("kind").notNull(),
+    displayOrder: integer("display_order").notNull().default(0)
+}, (table) => ({
+    postIdIdx: index("post_media_post_id_idx").on(table.postId)
+}));
+export const postLikes = pgTable("post_likes", {
+    id: serial("id").primaryKey(),
+    postId: integer("post_id")
+        .notNull()
+        .references(() => posts.id, { onDelete: "cascade" }),
+    userId: integer("user_id")
+        .notNull()
+        .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").defaultNow().notNull()
+}, (table) => ({
+    postUserUnique: uniqueIndex("post_likes_post_user_unique").on(table.postId, table.userId),
+    postIdIdx: index("post_likes_post_id_idx").on(table.postId)
+}));
+export const postComments = pgTable("post_comments", {
+    id: serial("id").primaryKey(),
+    postId: integer("post_id")
+        .notNull()
+        .references(() => posts.id, { onDelete: "cascade" }),
+    authorId: integer("author_id")
+        .notNull()
+        .references(() => users.id, { onDelete: "cascade" }),
+    content: text("content").notNull(),
+    parentCommentId: integer("parent_comment_id").references(() => postComments.id, {
+        onDelete: "cascade"
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull()
+}, (table) => ({
+    postIdIdx: index("post_comments_post_id_idx").on(table.postId),
+    authorIdIdx: index("post_comments_author_id_idx").on(table.authorId)
+}));
+/**
+ * AI chat layer
+ * - aiChatSessions: one session per (user, restaurant); stores a rolling conversation_summary.
+ * - aiChatMessages: individual turns (role: user | assistant) in a session.
+ */
+export const aiChatSessions = pgTable("ai_chat_sessions", {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    restaurantId: integer("restaurant_id").notNull().references(() => restaurants.id, { onDelete: "cascade" }),
+    conversationSummary: text("conversation_summary"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull()
+}, (table) => ({
+    userRestaurantUnique: uniqueIndex("ai_chat_sessions_user_restaurant_unique").on(table.userId, table.restaurantId)
+}));
+export const aiChatMessages = pgTable("ai_chat_messages", {
+    id: serial("id").primaryKey(),
+    sessionId: integer("session_id").notNull().references(() => aiChatSessions.id, { onDelete: "cascade" }),
+    role: text("role").notNull(),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull()
+}, (table) => ({
+    sessionIdIdx: index("ai_chat_messages_session_id_idx").on(table.sessionId)
 }));

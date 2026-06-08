@@ -12,12 +12,15 @@ vi.mock("../lib/db.js", () => ({
   },
 }));
 
-vi.mock("@google/generative-ai", () => ({
-  GoogleGenerativeAI: vi.fn(),
+vi.mock("../lib/ai/index.js", () => ({
+  chat: vi.fn(),
+  generateText: vi.fn(),
+  requireAiProvider: vi.fn(),
+  resolveModel: vi.fn(),
 }));
 
 import { db } from "../lib/db.js";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { chat, requireAiProvider, resolveModel } from "../lib/ai/index.js";
 
 // Reset all mock implementations before each test to prevent state leaking between tests.
 beforeEach(() => {
@@ -175,13 +178,19 @@ describe("clearChatSession", () => {
 
 describe("processChat", () => {
   beforeEach(() => {
-    delete process.env.GEMINI_API_KEY;
+    vi.mocked(requireAiProvider).mockReturnValue("gemini");
+    vi.mocked(resolveModel).mockReturnValue("gemini-2.0-flash");
   });
 
-  it("throws when GEMINI_API_KEY is not set", async () => {
+  it("throws when no AI provider is configured", async () => {
+    const { AiNotConfiguredError } = await import("../lib/ai/types.js");
+    vi.mocked(requireAiProvider).mockImplementation(() => {
+      throw new AiNotConfiguredError();
+    });
+
     await expect(
       processChat({ userId: 1, restaurantId: 1, message: "Hello" })
-    ).rejects.toThrow("GEMINI_API_KEY not configured");
+    ).rejects.toThrow("AI provider is not configured");
   });
 
   // Promise.all([fetchMenuContext, fetchUserContext, getOrCreateSession]) starts all three
@@ -220,9 +229,7 @@ describe("processChat", () => {
     vi.mocked(db.update).mockReturnValue(dbChain([]) as ReturnType<typeof db.update>);
   }
 
-  it("returns message and recommendations from Gemini JSON response", async () => {
-    process.env.GEMINI_API_KEY = "test-key";
-
+  it("returns message and recommendations from AI JSON response", async () => {
     setupProcessChatMocks({
       restaurant: [{ name: "Sushi Bar" }],
       pref: [{ preferenceText: "I love sushi" }],
@@ -234,12 +241,12 @@ describe("processChat", () => {
       recommendations: [{ dishName: "Spicy Tuna Roll", reason: "Matches your sushi preference" }],
     });
 
-    const mockSendMessage = vi.fn().mockResolvedValue({ response: { text: () => aiResponse } });
-    const mockStartChat = vi.fn().mockReturnValue({ sendMessage: mockSendMessage });
-    const mockGetModel = vi.fn().mockReturnValue({ startChat: mockStartChat });
-    vi.mocked(GoogleGenerativeAI).mockImplementation(function () {
-      return { getGenerativeModel: mockGetModel };
-    } as never);
+    vi.mocked(chat).mockResolvedValue({
+      text: aiResponse,
+      tokensUsed: 42,
+      model: "gemini-2.0-flash",
+      provider: "gemini"
+    });
 
     const result = await processChat({ userId: 1, restaurantId: 5, message: "What should I order?" });
 
@@ -249,15 +256,16 @@ describe("processChat", () => {
     expect(result.sessionId).toBe(99);
   });
 
-  it("falls back to raw text when Gemini response is not valid JSON", async () => {
-    process.env.GEMINI_API_KEY = "test-key";
+  it("falls back to raw text when AI response is not valid JSON", async () => {
     setupProcessChatMocks();
 
     const rawText = "Here are my suggestions: the pasta is excellent.";
-    const mockSendMessage = vi.fn().mockResolvedValue({ response: { text: () => rawText } });
-    vi.mocked(GoogleGenerativeAI).mockImplementation(function () {
-      return { getGenerativeModel: vi.fn().mockReturnValue({ startChat: vi.fn().mockReturnValue({ sendMessage: mockSendMessage }) }) };
-    } as never);
+    vi.mocked(chat).mockResolvedValue({
+      text: rawText,
+      tokensUsed: 10,
+      model: "gemini-2.0-flash",
+      provider: "gemini"
+    });
 
     const result = await processChat({ userId: 1, restaurantId: 5, message: "Recommend something" });
 
@@ -265,8 +273,7 @@ describe("processChat", () => {
     expect(result.recommendations).toHaveLength(0);
   });
 
-  it("passes conversation history to Gemini chat in correct role format", async () => {
-    process.env.GEMINI_API_KEY = "test-key";
+  it("passes conversation history to the AI channel in chronological order", async () => {
     // DESC order (newest first) — the service fetches with orderBy(desc(...)) then calls
     // .reverse(), so we must provide them newest-first to end up chronological after reversal.
     setupProcessChatMocks({
@@ -276,21 +283,18 @@ describe("processChat", () => {
       ],
     });
 
-    const mockStartChat = vi.fn().mockReturnValue({
-      sendMessage: vi.fn().mockResolvedValue({
-        response: { text: () => JSON.stringify({ message: "Great choice!", recommendations: [] }) },
-      }),
+    vi.mocked(chat).mockResolvedValue({
+      text: JSON.stringify({ message: "Great choice!", recommendations: [] }),
+      tokensUsed: 8,
+      model: "gemini-2.0-flash",
+      provider: "gemini"
     });
-    vi.mocked(GoogleGenerativeAI).mockImplementation(function () {
-      return { getGenerativeModel: vi.fn().mockReturnValue({ startChat: mockStartChat }) };
-    } as never);
 
     await processChat({ userId: 1, restaurantId: 5, message: "Tell me more" });
 
-    const callArg = mockStartChat.mock.calls[0][0] as { history: Array<{ role: string }> };
+    const callArg = vi.mocked(chat).mock.calls[0][0];
     expect(callArg.history).toHaveLength(2);
-    // assistant messages must be mapped to "model" for Gemini's API
     expect(callArg.history[0].role).toBe("user");
-    expect(callArg.history[1].role).toBe("model");
+    expect(callArg.history[1].role).toBe("assistant");
   });
 });

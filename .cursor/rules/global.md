@@ -18,7 +18,7 @@ These rules tell Cursor how to work in this repo so development stays fast, safe
   - **Validation**: Zod (schemas in `packages/shared`).
   - **Backend framework**: Fastify (DO NOT introduce Express).
   - **Testing**: Vitest (unit/integration), Playwright (E2E).
-  - **DB / Migrations**: Drizzle ORM + drizzle-kit.
+  - **DB / Migrations**: Drizzle ORM + drizzle-kit. **Never hand-write** `packages/db/drizzle/*.sql` — edit `schema.ts`, run `drizzle:generate`, then `drizzle:migrate`. See `.cursor/rules/drizzle-migrations.mdc` and `CLAUDE.md` §7.
 
 When in doubt, follow patterns already used in these folders before inventing new ones.
 

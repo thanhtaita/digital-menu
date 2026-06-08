@@ -55,9 +55,9 @@ What **this service** exposes and enforces today. Canonical path list: root `IMP
 
 ## AI ingredient suggestions
 
-- `**POST /api/v1/dishes/suggest-ingredients**` — restaurant admin or superadmin only. Sends dish name + optional description/context to **Google Gemini** (model configurable via `AI_SUGGESTION_MODEL` env var, default `gemini-2.0-flash-lite`). Returns a ranked list of ingredient suggestions, each with: `suggestedName`, `confidence` (`high`/`medium`), and `matchedIngredient` if an existing dictionary entry matches (exact or pg_trgm fuzzy match). Low-confidence suggestions are filtered out server-side. `shouldCreate: true` indicates the ingredient is not in the dictionary yet. Returns `503` when `GEMINI_API_KEY` is absent; graceful `502` on provider errors.
+- `**POST /api/v1/dishes/suggest-ingredients**` — restaurant admin or superadmin only. Sends dish name + optional description/context to the configured AI provider (**Gemini** or **OpenAI**). Model via `AI_SUGGESTION_MODEL` (provider-specific default when unset). Returns a ranked list of ingredient suggestions, each with: `suggestedName`, `confidence` (`high`/`medium`), and `matchedIngredient` if an existing dictionary entry matches (exact or pg_trgm fuzzy match). Low-confidence suggestions are filtered out server-side. `shouldCreate: true` indicates the ingredient is not in the dictionary yet. Returns `503` when no AI provider is configured; graceful `502` on provider errors.
 - **Fuzzy matching:** first tries case-insensitive exact match, then `similarity()` via pg_trgm (skipped silently if extension is unavailable). Threshold configurable via `AI_FUZZY_MATCH_THRESHOLD` (default `0.6`).
-- **Env vars:** `GEMINI_API_KEY`, `AI_SUGGESTION_MODEL`, `AI_SUGGESTION_TEMPERATURE`, `AI_SUGGESTION_MAX_TOKENS`, `AI_FUZZY_MATCH_THRESHOLD`.
+- **Env vars:** `AI_PROVIDER` (optional: `gemini` | `openai` | `chatgpt`), `GEMINI_API_KEY`, `OPENAI_API_KEY`, `AI_SUGGESTION_MODEL`, `AI_SUGGESTION_TEMPERATURE`, `AI_SUGGESTION_MAX_TOKENS`, `AI_FUZZY_MATCH_THRESHOLD`. Auto-selects the provider from whichever API key is set; when both keys are set, defaults to Gemini unless `AI_PROVIDER` overrides.
 
 ## User preferences
 
@@ -86,12 +86,12 @@ What **this service** exposes and enforces today. Canonical path list: root `IMP
 
 ## AI chat recommendations
 
-- **`POST /public/restaurants/:slug/chat`** — auth required (diners); sends a message to a Gemini-powered recommendation assistant. Context passed to the LLM: full published menu (section → dish name/price/description), user preference text, dietary restrictions, and a rolling conversation summary. Returns `{ message, recommendations: [{dishName, reason}], sessionId }`.
+- **`POST /public/restaurants/:slug/chat`** — auth required (diners); sends a message to the configured AI provider (Gemini or OpenAI). Context passed to the LLM: full published menu (section → dish name/price/description), user preference text, dietary restrictions, and a rolling conversation summary. Returns `{ message, recommendations: [{dishName, reason}], sessionId }`.
 - **`GET /public/restaurants/:slug/chat/history`** — returns `{ restaurantName, messages, summary }` for this user × restaurant session.
 - **`DELETE /public/restaurants/:slug/chat`** — clears the session.
 - **Persistence:** one `ai_chat_sessions` row per user × restaurant (stores rolling `conversation_summary`); unlimited `ai_chat_messages` per session.
-- **Token management:** last 10 messages always passed to the LLM. When a session exceeds 20 messages, the oldest messages are summarized (via `gemini-2.0-flash-lite`) and deleted; the summary is stored on the session and prepended to future prompts.
-- **Env vars:** `GEMINI_API_KEY` (required), `AI_CHAT_MODEL` (default `gemini-2.0-flash`).
+- **Token management:** last 10 messages always passed to the LLM. When a session exceeds 20 messages, the oldest messages are summarized and deleted; the summary is stored on the session and prepended to future prompts.
+- **Env vars:** `AI_PROVIDER`, `GEMINI_API_KEY`, `OPENAI_API_KEY`, `AI_CHAT_MODEL`, `AI_CHAT_SUMMARIZE_MODEL` (provider-specific defaults when unset).
 - **DB:** `ai_chat_sessions`, `ai_chat_messages` tables. Migration `0008_ai_chat.sql`.
 
 ## Not implemented here (see `PROGRESS.md`)

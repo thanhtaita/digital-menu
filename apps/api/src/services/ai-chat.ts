@@ -1,5 +1,5 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { eq, and, asc, desc, inArray } from "drizzle-orm";
+import { chat, generateText, resolveModel, requireAiProvider } from "../lib/ai/index.js";
 import { db } from "../lib/db.js";
 import {
   restaurants,
@@ -165,17 +165,22 @@ async function summarizeSession(sessionId: number, currentSummary: string | null
 
   const toSummarize = allMessages.slice(0, allMessages.length - RECENT_MESSAGES_WINDOW);
 
-  const apiKey = process.env.GEMINI_API_KEY!;
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
+  const provider = requireAiProvider();
+  const modelName = resolveModel(provider, "summarize", process.env.AI_CHAT_SUMMARIZE_MODEL);
 
   const historyText = toSummarize.map((m) => `${m.role}: ${m.content}`).join("\n");
   const prompt = currentSummary
     ? `Previous summary:\n${currentSummary}\n\nNew conversation:\n${historyText}\n\nWrite a concise updated summary (2–4 sentences) of the user's food preferences and interests revealed in this conversation.`
     : `Conversation:\n${historyText}\n\nWrite a concise summary (2–4 sentences) of the user's food preferences and interests.`;
 
-  const result = await model.generateContent(prompt);
-  const newSummary = result.response.text().trim();
+  const result = await generateText({
+    systemPrompt: "You summarize diner food preferences from restaurant chat transcripts.",
+    userPrompt: prompt,
+    model: modelName,
+    temperature: 0.3,
+    maxOutputTokens: 300
+  });
+  const newSummary = result.text.trim();
 
   await db
     .update(aiChatSessions)
@@ -193,8 +198,7 @@ export async function processChat(params: {
 }): Promise<{ message: string; recommendations: Array<{ dishName: string; reason: string }>; sessionId: number }> {
   const { userId, restaurantId, message } = params;
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY not configured");
+  const provider = requireAiProvider();
 
   const [{ restaurantName, menuText }, userContext, session] = await Promise.all([
     fetchMenuContext(restaurantId),
@@ -213,26 +217,20 @@ export async function processChat(params: {
 
   const systemPrompt = buildSystemPrompt(restaurantName, menuText, userContext, session.conversationSummary);
 
-  const chatHistory = recentMessages.map((m) => ({
-    role: m.role === "user" ? ("user" as const) : ("model" as const),
-    parts: [{ text: m.content }]
-  }));
-
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const modelName = process.env.AI_CHAT_MODEL ?? "gemini-2.0-flash";
-  const model = genAI.getGenerativeModel({
+  const modelName = resolveModel(provider, "chat", process.env.AI_CHAT_MODEL);
+  const result = await chat({
+    systemPrompt,
+    history: recentMessages.map((m) => ({
+      role: m.role === "user" ? ("user" as const) : ("assistant" as const),
+      content: m.content
+    })),
+    userMessage: message,
     model: modelName,
-    systemInstruction: systemPrompt,
-    generationConfig: {
-      temperature: 0.7,
-      maxOutputTokens: 1000,
-      responseMimeType: "application/json"
-    }
+    temperature: 0.7,
+    maxOutputTokens: 1000,
+    jsonMode: true
   });
-
-  const chat = model.startChat({ history: chatHistory });
-  const result = await chat.sendMessage(message);
-  const responseText = result.response.text();
+  const responseText = result.text;
 
   let aiMessage = "I had trouble processing that. Please try again.";
   let recommendations: Array<{ dishName: string; reason: string }> = [];

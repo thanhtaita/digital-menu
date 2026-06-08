@@ -4,6 +4,7 @@ import { db } from "../lib/db.js";
 import { restaurants } from "@digital-menu/db";
 import { sendChatMessageSchema } from "@digital-menu/shared";
 import { requireAuth } from "../middleware/auth.js";
+import { isAiNotConfiguredError } from "../lib/ai/index.js";
 import { processChat, getChatHistory, clearChatSession } from "../services/ai-chat.js";
 
 async function resolveRestaurant(slug: string): Promise<{ id: number } | null> {
@@ -36,8 +37,7 @@ export async function aiChatRoutes(app: FastifyInstance) {
       });
       return reply.send(result);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "";
-      if (msg.includes("GEMINI_API_KEY")) {
+      if (isAiNotConfiguredError(err)) {
         return reply.status(503).send({ error: "AI chat is not configured", code: "AI_NOT_CONFIGURED" });
       }
       request.log.error({ err }, "AI chat failed");

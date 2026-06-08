@@ -18,6 +18,7 @@ import {
   apiRemoveDishIngredient,
   apiRequestIngredient,
   apiSearchIngredients,
+  apiSuggestIngredients,
   apiUploadDishMedia,
   apiDeleteDishMedia,
   apiReorderDishMedia,
@@ -29,7 +30,8 @@ import {
   apiDeleteMenu,
   apiDeleteSection,
   type Dish,
-  type Ingredient
+  type Ingredient,
+  type AiIngredientSuggestion
 } from "../lib/api-client";
 import { ConfirmDialog } from "../components/confirm-dialog";
 import { useAuth } from "@/auth-context";
@@ -89,6 +91,12 @@ export function MenuBuilderPage() {
     destructive?: boolean;
     onConfirm: () => void;
   } | null>(null);
+
+  // AI ingredient suggestion state
+  const [aiContextPrompt, setAiContextPrompt] = useState("");
+  const [aiSuggestions, setAiSuggestions] = useState<AiIngredientSuggestion[]>([]);
+  const [selectedAiSuggestions, setSelectedAiSuggestions] = useState<Set<number>>(new Set());
+  const [aiSuggestionError, setAiSuggestionError] = useState<string | null>(null);
 
   // Dish translation state
   const [translationLocale, setTranslationLocale] = useState("");
@@ -235,6 +243,72 @@ export function MenuBuilderPage() {
         return;
       }
       setRequestIngredientError(e?.data?.error ?? "Request failed.");
+    }
+  });
+
+  const generateAiSuggestionsM = useMutation({
+    mutationFn: () => {
+      if (!selectedDish) throw new Error("No dish selected");
+      return apiSuggestIngredients({
+        dishName: selectedDish.name,
+        description: selectedDish.description ?? undefined,
+        contextPrompt: aiContextPrompt.trim() || undefined,
+        restaurantId
+      });
+    },
+    onSuccess: (data) => {
+      setAiSuggestions(data.suggestions);
+      setAiSuggestionError(null);
+      // Pre-select all high/medium confidence suggestions
+      setSelectedAiSuggestions(new Set(data.suggestions.map((_, idx) => idx)));
+    },
+    onError: (err: unknown) => {
+      const e = err as { status?: number; data?: { error?: string } };
+      setAiSuggestionError(e?.data?.error ?? "Failed to generate suggestions. Please try again.");
+    }
+  });
+
+  const acceptAiSuggestionsM = useMutation({
+    mutationFn: async () => {
+      if (selectedDishId == null) throw new Error("No dish selected");
+      const toAccept = aiSuggestions.filter((_, idx) => selectedAiSuggestions.has(idx));
+      const alreadyAttached = new Set(dishIngredientsQ.data?.map((i) => i.ingredientId) ?? []);
+      let pendingCount = 0;
+
+      for (const suggestion of toAccept) {
+        if (suggestion.matchedIngredient) {
+          if (!alreadyAttached.has(suggestion.matchedIngredient.id)) {
+            await apiAddDishIngredient(selectedDishId, { ingredientId: suggestion.matchedIngredient.id });
+          }
+          if (suggestion.matchedIngredient.status === "pending") pendingCount++;
+        } else if (suggestion.shouldCreate) {
+          try {
+            const created = await apiRequestIngredient({
+              canonicalName: suggestion.suggestedName,
+              restaurantId
+            });
+            await apiAddDishIngredient(selectedDishId, { ingredientId: created.id });
+            pendingCount++;
+          } catch {
+            // skip if ingredient already exists or request fails
+          }
+        }
+      }
+      return { pendingCount };
+    },
+    onSuccess: async ({ pendingCount }) => {
+      setAiSuggestions([]);
+      setSelectedAiSuggestions(new Set());
+      setAiContextPrompt("");
+      await queryClient.invalidateQueries({ queryKey: ["dish-ingredients", selectedDishId] });
+      if (pendingCount > 0) {
+        setAiSuggestionError(null);
+        // Show info inline (reuse error slot with a neutral message)
+        setAiSuggestionError(`${pendingCount} ingredient(s) pending superadmin approval and will be attached once approved.`);
+      }
+    },
+    onError: () => {
+      setAiSuggestionError("Some ingredients could not be added. Please try again.");
     }
   });
 
@@ -1101,6 +1175,102 @@ export function MenuBuilderPage() {
           <CardTitle>Tag ingredients {selectedDish ? `for ${selectedDish.name}` : ""}</CardTitle>
         </CardHeader>
         <CardContent>
+          {selectedDishId != null && canEditMenu && (
+            <div className="mb-4 rounded border border-slate-200 bg-slate-50 p-3">
+              <p className="mb-2 text-xs font-medium text-slate-800">AI ingredient suggestions</p>
+              <textarea
+                value={aiContextPrompt}
+                onChange={(e) => setAiContextPrompt(e.target.value)}
+                placeholder="Optional context (e.g., Vietnamese style, extra spicy, vegetarian version)"
+                rows={2}
+                className="mb-2 w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs placeholder:text-slate-400"
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs"
+                disabled={generateAiSuggestionsM.isPending || !selectedDish?.name}
+                onClick={() => {
+                  setAiSuggestions([]);
+                  setSelectedAiSuggestions(new Set());
+                  setAiSuggestionError(null);
+                  generateAiSuggestionsM.mutate();
+                }}
+              >
+                {generateAiSuggestionsM.isPending ? "Generating…" : "Generate ingredient suggestions"}
+              </Button>
+
+              {aiSuggestions.length > 0 && (
+                <div className="mt-3 space-y-1">
+                  <p className="text-[11px] text-slate-500">
+                    Select suggestions to add. Items marked "new" will be submitted as pending ingredient requests.
+                  </p>
+                  <ul className="mt-1 space-y-1">
+                    {aiSuggestions.map((suggestion, idx) => (
+                      <li key={idx} className="flex items-center gap-2 text-xs">
+                        <input
+                          type="checkbox"
+                          id={`ai-suggestion-${idx}`}
+                          checked={selectedAiSuggestions.has(idx)}
+                          onChange={() => {
+                            const next = new Set(selectedAiSuggestions);
+                            if (next.has(idx)) next.delete(idx);
+                            else next.add(idx);
+                            setSelectedAiSuggestions(next);
+                          }}
+                          className="h-3.5 w-3.5 rounded"
+                        />
+                        <label htmlFor={`ai-suggestion-${idx}`} className="flex-1 cursor-pointer">
+                          <span className="font-medium text-slate-900">{suggestion.suggestedName}</span>
+                          {suggestion.matchedIngredient?.status === "pending" && (
+                            <span className="ml-1 text-amber-700" title="Pending superadmin approval">⏳</span>
+                          )}
+                          {suggestion.shouldCreate && (
+                            <span className="ml-1 italic text-amber-700">(new — will request)</span>
+                          )}
+                        </label>
+                        <span className={`text-[10px] ${suggestion.confidence === "high" ? "text-emerald-700" : "text-slate-400"}`}>
+                          {suggestion.confidence}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-7 text-xs"
+                      disabled={acceptAiSuggestionsM.isPending || selectedAiSuggestions.size === 0}
+                      onClick={() => acceptAiSuggestionsM.mutate()}
+                    >
+                      {acceptAiSuggestionsM.isPending
+                        ? "Adding…"
+                        : `Accept selected (${selectedAiSuggestions.size})`}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      onClick={() => {
+                        setAiSuggestions([]);
+                        setSelectedAiSuggestions(new Set());
+                        setAiSuggestionError(null);
+                      }}
+                    >
+                      Dismiss
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {aiSuggestionError && (
+                <p className="mt-2 text-xs text-slate-600">{aiSuggestionError}</p>
+              )}
+            </div>
+          )}
+
           <Input
             value={ingredientQuery}
             onChange={(e) => setIngredientQuery(e.target.value)}

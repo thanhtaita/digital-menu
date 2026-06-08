@@ -1,5 +1,5 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { and, eq, ilike, or, sql } from "drizzle-orm";
+import { generateText, resolveModel, requireAiProvider } from "../lib/ai/index.js";
 import { db } from "../lib/db.js";
 import { ingredients } from "@digital-menu/db";
 
@@ -121,26 +121,23 @@ export async function suggestIngredients(params: {
   cuisineType?: string;
   restaurantId: number;
 }): Promise<SuggestIngredientsResult> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY is not configured");
-
-  const modelName = process.env.AI_SUGGESTION_MODEL ?? "gemini-2.0-flash-lite";
+  const provider = requireAiProvider();
+  const modelName = resolveModel(provider, "suggestion", process.env.AI_SUGGESTION_MODEL);
   const temperature = Number(process.env.AI_SUGGESTION_TEMPERATURE ?? "0.3");
   const maxOutputTokens = Number(process.env.AI_SUGGESTION_MAX_TOKENS ?? "1000");
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: modelName,
-    systemInstruction: SYSTEM_PROMPT,
-    generationConfig: { temperature, maxOutputTokens }
-  });
-
   const t0 = Date.now();
-  const aiResult = await model.generateContent(buildPrompt(params));
+  const aiResult = await generateText({
+    systemPrompt: SYSTEM_PROMPT,
+    userPrompt: buildPrompt(params),
+    model: modelName,
+    temperature,
+    maxOutputTokens
+  });
   const latencyMs = Date.now() - t0;
 
-  const text = aiResult.response.text();
-  const tokensUsed = aiResult.response.usageMetadata?.totalTokenCount ?? 0;
+  const text = aiResult.text;
+  const tokensUsed = aiResult.tokensUsed;
 
   let rawItems: AiIngredientRaw[] = [];
   try {

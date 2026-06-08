@@ -4,7 +4,8 @@ import type {
   RequestIngredientInput,
   UpdateIngredientInput,
   UpsertTranslationInput,
-  Role
+  Role,
+  SuggestIngredientsRequest
 } from "@digital-menu/shared";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3002/api/v1";
@@ -375,6 +376,11 @@ export async function apiReorderIngredientMedia(ingredientId: number, orderedIds
   return ingredientMediaReorderResponseSchema.parse(data);
 }
 
+export async function apiListIngredients(offset: number, limit = 20): Promise<Ingredient[]> {
+  const data = await request<unknown[]>(`/ingredients?limit=${limit}&offset=${offset}`, { method: "GET" });
+  return z.array(ingredientSchema).parse(data);
+}
+
 export async function apiSearchIngredients(q: string): Promise<Ingredient[]> {
   const query = q.trim();
   const data = await request<unknown[]>(`/ingredients${query ? `?q=${encodeURIComponent(query)}` : ""}`, {
@@ -594,4 +600,35 @@ export async function apiDeleteIngredientTranslation(ingredientId: number, local
     `/ingredients/${ingredientId}/translations/${encodeURIComponent(locale)}`,
     { method: "DELETE" }
   );
+}
+
+// ── AI ingredient suggestions ─────────────────────────────────────────────
+
+export type AiMatchedIngredient = {
+  id: number;
+  canonicalName: string;
+  slug: string;
+  status: "approved" | "pending";
+};
+
+export type AiIngredientSuggestion = {
+  suggestedName: string;
+  matchedIngredient: AiMatchedIngredient | null;
+  confidence: "high" | "medium" | "low";
+  shouldCreate: boolean;
+  category?: string;
+};
+
+export type SuggestIngredientsResponse = {
+  suggestions: AiIngredientSuggestion[];
+  metadata: { model: string; tokensUsed: number; latencyMs: number };
+};
+
+export async function apiSuggestIngredients(
+  input: SuggestIngredientsRequest
+): Promise<SuggestIngredientsResponse> {
+  return request<SuggestIngredientsResponse>("/dishes/suggest-ingredients", {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
 }

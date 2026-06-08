@@ -73,7 +73,7 @@ Base URL: `http://localhost:3002/api/v1`
 - `DELETE /dishes/:dishId/ingredients/:ingredientId`
 
 ### AI Ingredient Suggestions
-- `POST /dishes/suggest-ingredients` — auth required (restaurant admin or superadmin). Body: `{ dishName, restaurantId, description?, contextPrompt?, cuisineType? }`. Calls Gemini AI to generate an ingredient list, then fuzzy-matches each suggestion against the ingredient dictionary. Returns `{ suggestions: [{ suggestedName, matchedIngredient?, confidence, shouldCreate, category? }], metadata: { model, tokensUsed, latencyMs } }`. Returns `503` if `GEMINI_API_KEY` is not set, `502` on AI provider failure.
+- `POST /dishes/suggest-ingredients` — auth required (restaurant admin or superadmin). Body: `{ dishName, restaurantId, description?, contextPrompt?, cuisineType? }`. Calls the configured AI provider (Gemini or OpenAI) to generate an ingredient list, then fuzzy-matches each suggestion against the ingredient dictionary. Returns `{ suggestions: [{ suggestedName, matchedIngredient?, confidence, shouldCreate, category? }], metadata: { model, tokensUsed, latencyMs } }`. Returns `503` if no AI provider is configured, `502` on AI provider failure.
 
 ### User restrictions (`/users/me/restrictions`)
 - `GET /users/me/restrictions` — list the caller's restrictions; requires session. Each row includes `ingredient` object (`id`, `canonicalName`, `slug`) when a specific ingredient is linked, otherwise `null`.
@@ -157,7 +157,7 @@ Base URL (dev): `http://localhost:3003`
 - `/` — restaurant discovery page (lists active restaurants and links to each `/r/[slug]` menu).
 - `/r/[slug]` — server-rendered public menu for restaurant `slug`; ingredient names link to `?i=<ingredient-slug>` and open a detail modal. Logged-in users see restriction badges on dishes and highlighted ingredient pills.
 - `/r/[slug]?tab=posts` — community posts tab for that restaurant; "Write a post" composer for logged-in users.
-- `/r/[slug]/chat` — AI recommendations chat (auth required); conversational interface powered by Gemini; conversation persists across visits.
+- `/r/[slug]/chat` — AI recommendations chat (auth required); conversational interface powered by the configured AI provider (Gemini or OpenAI); conversation persists across visits.
 - `/login` — email + password login for diner users.
 - `/register` — create a diner account (email, optional display name, password).
 - `/profile` — view account info and manage dietary restrictions (add allergy/dislike by ingredient search, add diet type, remove existing).

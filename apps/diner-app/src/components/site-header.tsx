@@ -48,7 +48,18 @@ export function SiteHeader() {
             {user ? (
               <>
                 <Link
-                  href="/profile"
+                  href="/feed"
+                  style={{
+                    fontFamily: "var(--ui)",
+                    fontSize: 13,
+                    color: "var(--inkMuted)",
+                    textDecoration: "none",
+                  }}
+                >
+                  Feed
+                </Link>
+                <Link
+                  href={`/u/${user.id}`}
                   style={{
                     fontFamily: "var(--ui)",
                     fontSize: 13,

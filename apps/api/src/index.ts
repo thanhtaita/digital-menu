@@ -1,4 +1,10 @@
+import dotenv from "dotenv";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { buildApp } from "./app.js";
+
+// apps/api/.env must win over machine/user OPENAI_API_KEY (dotenv skips existing vars by default)
+dotenv.config({ path: join(dirname(fileURLToPath(import.meta.url)), "../.env"), override: true });
 
 const port = Number(process.env.PORT) || 3001;
 

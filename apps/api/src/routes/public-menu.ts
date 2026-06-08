@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { eq, and, asc, inArray, or } from "drizzle-orm";
+import { eq, and, asc, desc, inArray, lt } from "drizzle-orm";
 import { db } from "../lib/db.js";
 import {
   restaurants,
@@ -9,9 +9,12 @@ import {
   dishIngredients,
   ingredients,
   dishMedia,
-  ingredientMedia
+  ingredientMedia,
+  posts,
+  users
 } from "@digital-menu/db";
 import { publicMenuResponseSchema, publicRestaurantListResponseSchema } from "@digital-menu/shared";
+import { buildPostsResponse, POST_SELECT_COLUMNS, FEED_PAGE_SIZE, type RawPostRow } from "../lib/post-helpers.js";
 
 export async function publicMenuRoutes(app: FastifyInstance) {
   app.get("/restaurants", async () => {
@@ -106,11 +109,6 @@ export async function publicMenuRoutes(app: FastifyInstance) {
       list.push(row);
       mediaByDish.set(row.dishId, list);
     }
-    const ingredientVisibility = or(
-      eq(ingredients.approvalStatus, "approved"),
-      and(eq(ingredients.approvalStatus, "pending"), eq(ingredients.requestedByRestaurantId, restaurant.id))
-    );
-
     const ingredientRows =
       dishIds.length === 0
         ? []
@@ -134,7 +132,7 @@ export async function publicMenuRoutes(app: FastifyInstance) {
               and(
                 inArray(dishIngredients.dishId, dishIds),
                 eq(dishIngredients.isHidden, false),
-                ingredientVisibility
+                eq(ingredients.approvalStatus, "approved")
               )
             )
             .orderBy(asc(dishIngredients.displayOrder), asc(dishIngredients.id));
@@ -236,5 +234,40 @@ export async function publicMenuRoutes(app: FastifyInstance) {
 
     const parsed = publicMenuResponseSchema.parse(payload);
     return reply.send(parsed);
+  });
+
+  // GET /public/restaurants/:slug/posts — no auth, cursor-based
+  app.get<{ Params: { slug: string } }>("/restaurants/:slug/posts", async (request, reply) => {
+    const [restaurant] = await db
+      .select({ id: restaurants.id })
+      .from(restaurants)
+      .where(and(eq(restaurants.slug, request.params.slug), eq(restaurants.isActive, true)))
+      .limit(1);
+
+    if (!restaurant) return reply.status(404).send({ error: "Restaurant not found" });
+
+    const query = request.query as { before?: string; limit?: string };
+    const limit = Math.min(parseInt(query.limit ?? "20", 10) || FEED_PAGE_SIZE, 50);
+    const before = query.before ? parseInt(query.before, 10) : null;
+
+    const rows = await db
+      .select(POST_SELECT_COLUMNS)
+      .from(posts)
+      .innerJoin(users, eq(posts.authorId, users.id))
+      .leftJoin(restaurants, eq(posts.restaurantId, restaurants.id))
+      .where(
+        before !== null && !isNaN(before)
+          ? and(eq(posts.restaurantId, restaurant.id), lt(posts.id, before))
+          : eq(posts.restaurantId, restaurant.id)
+      )
+      .orderBy(desc(posts.id))
+      .limit(limit + 1);
+
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const nextCursor = hasMore ? page[page.length - 1].id : null;
+
+    const postsList = await buildPostsResponse(page as RawPostRow[], null);
+    return reply.send({ posts: postsList, nextCursor });
   });
 }

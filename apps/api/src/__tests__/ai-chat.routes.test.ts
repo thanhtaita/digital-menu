@@ -130,7 +130,8 @@ describe("POST /public/restaurants/:slug/chat", () => {
   it("returns 503 when AI is not configured", async () => {
     authAs(MOCK_USER);
     dbReturnsRestaurant(MOCK_RESTAURANT);
-    vi.mocked(processChat).mockRejectedValue(new Error("GEMINI_API_KEY not configured"));
+    const { AiNotConfiguredError } = await import("../lib/ai/types.js");
+    vi.mocked(processChat).mockRejectedValue(new AiNotConfiguredError());
     const res = await app.inject({
       method: "POST",
       url: `/public/restaurants/${KNOWN_SLUG}/chat`,

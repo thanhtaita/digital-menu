@@ -124,11 +124,25 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.status(401).send({ error: "Unauthorized", code: "UNAUTHORIZED" });
     }
     const [user] = await db
-      .select({ id: users.id, email: users.email, role: users.role, displayName: users.displayName })
+      .select({
+        id: users.id,
+        email: users.email,
+        role: users.role,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+        bio: users.bio
+      })
       .from(users)
       .where(eq(users.id, session.userId))
       .limit(1);
     if (!user) return reply.status(401).send({ error: "Unauthorized", code: "UNAUTHORIZED" });
-    return reply.send({ id: user.id, email: user.email, role: user.role, displayName: user.displayName });
+    return reply.send({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      displayName: user.displayName,
+      avatarUrl: user.avatarUrl,
+      bio: user.bio
+    });
   });
 }

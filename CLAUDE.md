@@ -95,7 +95,25 @@ When in doubt, follow patterns already used in these folders before inventing ne
 
 ---
 
-## 7. Helper and Convention Rules
+## 7. DB Schema and Migration Rules
+
+**Drizzle owns migrations.** When adding or changing tables/columns/indexes:
+
+1. Edit `packages/db/src/schema/schema.ts`.
+2. Run `pnpm --filter @digital-menu/db drizzle:generate` — never hand-write `packages/db/drizzle/*.sql` or manually edit `packages/db/drizzle/meta/_journal.json`.
+3. Commit generated SQL + journal (+ snapshot files produced by generate).
+4. Run `pnpm --filter @digital-menu/db drizzle:migrate` (same `DATABASE_URL` as `apps/api`).
+5. Verify new tables exist and `drizzle.__drizzle_migrations` has a new SHA-256 hash row.
+
+**Do not:** create tables via raw SQL in a DB client, or write migration files yourself — that desyncs tracking and can block later migrations.
+
+**Local recovery:** `pnpm --filter @digital-menu/db db:reset` then migrate (and seed if needed). See `SETUP.md`.
+
+`meta/*_snapshot.json` files are for `drizzle:generate` only; `meta/_journal.json` is what `drizzle:migrate` reads.
+
+---
+
+## 8. Helper and Convention Rules
 
 - Before introducing a new helper or abstraction:
   - Search `packages/shared` and `apps/api/src/lib` (or future helper locations) for a suitable existing function or pattern.
@@ -106,7 +124,7 @@ When in doubt, follow patterns already used in these folders before inventing ne
 
 ---
 
-## 8. Documentation: Routes, Per-App Features, Progress
+## 9. Documentation: Routes, Per-App Features, Progress
 
 - **`PROGRESS.md`** (repo root) summarizes what is done vs next against `TECH_PLAN.md`. Update it when completing a plan milestone or changing priorities.
 - The **canonical list** of implemented HTTP API routes and admin-portal (and diner-app) **page routes** lives in **`IMPLEMENTED_ROUTES.md`** at the repo root.
@@ -123,7 +141,7 @@ When you ship work that touches one of those apps, **update the matching `FEATUR
 
 ---
 
-## 9. Plan- and Role-Aware Behavior
+## 10. Plan- and Role-Aware Behavior
 
 - When the user references a **feature plan**:
   - Obey the current step and do not jump ahead unless explicitly instructed.
@@ -139,6 +157,7 @@ When you ship work that touches one of those apps, **update the matching `FEATUR
 
 Follow these rules in order of priority:
 1. **Dependencies & architecture** must not be violated.
-2. **Documentation files** (`PROGRESS.md`, `IMPLEMENTED_ROUTES.md`, per-app `FEATURES.md`) must stay in sync with code changes.
-3. **Code style & testing** should match existing patterns in the repo.
-4. **Scope discipline** — stay within the change scope unless explicitly told otherwise.
+2. **DB migrations** — always `schema.ts` → `drizzle:generate` → `drizzle:migrate`; never hand-write migration SQL (§7).
+3. **Documentation files** (`PROGRESS.md`, `IMPLEMENTED_ROUTES.md`, per-app `FEATURES.md`) must stay in sync with code changes.
+4. **Code style & testing** should match existing patterns in the repo.
+5. **Scope discipline** — stay within the change scope unless explicitly told otherwise.

@@ -14,6 +14,7 @@ import {
   apiUploadIngredientMedia,
   apiDeleteIngredientMedia,
   apiReorderIngredientMedia,
+  apiListIngredients,
   apiSearchIngredients,
   type Ingredient,
   type TranslationRow
@@ -63,6 +64,13 @@ export function MetaIngredientsPage() {
   const [editAllergenGroup, setEditAllergenGroup] = useState("");
   const [editError, setEditError] = useState<string | null>(null);
 
+  // Browse (no-query) state
+  const PAGE_SIZE = 20;
+  const [browseList, setBrowseList] = useState<Ingredient[]>([]);
+  const [browseOffset, setBrowseOffset] = useState(0);
+  const [browseHasMore, setBrowseHasMore] = useState(true);
+  const [browseLoading, setBrowseLoading] = useState(false);
+
   // Ingredient media editing state
   const [mediaIngredientId, setMediaIngredientId] = useState<number | null>(null);
 
@@ -79,6 +87,28 @@ export function MetaIngredientsPage() {
     const t = setTimeout(() => setDebouncedQuery(searchQuery.trim()), 300);
     return () => clearTimeout(t);
   }, [searchQuery]);
+
+  async function loadMoreBrowse(startOffset: number) {
+    setBrowseLoading(true);
+    try {
+      const items = await apiListIngredients(startOffset, PAGE_SIZE);
+      setBrowseList((prev) => (startOffset === 0 ? items : [...prev, ...items]));
+      setBrowseHasMore(items.length === PAGE_SIZE);
+      setBrowseOffset(startOffset + items.length);
+    } finally {
+      setBrowseLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadMoreBrowse(0);
+  }, []);
+
+  useEffect(() => {
+    if (debouncedQuery.length === 0) {
+      void loadMoreBrowse(0);
+    }
+  }, [debouncedQuery]);
 
   useEffect(() => {
     const first = photoFiles[0];
@@ -397,13 +427,26 @@ export function MetaIngredientsPage() {
             autoComplete="off"
             className="max-w-sm"
           />
-          {searchQ.isFetching && <p className="mt-2 text-xs text-muted-foreground">Searching…</p>}
-          {searchQ.isFetched && !searchQ.isFetching && debouncedQuery.length >= 1 && (
-            <div className="mt-3 space-y-2">
-              {(searchQ.data?.length ?? 0) === 0 ? (
-                <p className="text-sm text-muted-foreground">No ingredients found for "{debouncedQuery}".</p>
-              ) : (
-                searchQ.data!.map((ing) => (
+          {(searchQ.isFetching || (browseLoading && browseList.length === 0)) && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {debouncedQuery.length >= 1 ? "Searching…" : "Loading…"}
+            </p>
+          )}
+          {(debouncedQuery.length === 0 || (searchQ.isFetched && !searchQ.isFetching)) && (
+            <div className="mt-3 max-h-[520px] overflow-y-auto pr-1">
+              <div className="space-y-2">
+                {(() => {
+                  const displayList = debouncedQuery.length === 0 ? browseList : (searchQ.data ?? []);
+                  if (displayList.length === 0 && !browseLoading) {
+                    return (
+                      <p className="text-sm text-muted-foreground">
+                        {debouncedQuery.length >= 1
+                          ? `No ingredients found for "${debouncedQuery}".`
+                          : "No ingredients found."}
+                      </p>
+                    );
+                  }
+                  return displayList.map((ing) => (
                   <div key={ing.id} className="rounded border border-slate-200 bg-white p-3 text-sm">
                     {editingIngredientId === ing.id ? (
                       <form
@@ -794,7 +837,19 @@ export function MetaIngredientsPage() {
                       </div>
                     )}
                   </div>
-                ))
+                  ));
+                })()}
+              </div>
+              {debouncedQuery.length === 0 && browseHasMore && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3 w-full"
+                  onClick={() => void loadMoreBrowse(browseOffset)}
+                  disabled={browseLoading}
+                >
+                  {browseLoading ? "Loading…" : "Load more"}
+                </Button>
               )}
             </div>
           )}

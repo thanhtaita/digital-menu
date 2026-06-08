@@ -120,21 +120,23 @@ export async function ingredientRoutes(app: FastifyInstance) {
   });
 
   app.get<{
-    Querystring: { q?: string };
+    Querystring: { q?: string; limit?: number; offset?: number };
   }>("/", async (request, reply) => {
     const q = request.query.q?.trim();
+    const limit = Number(request.query.limit) || (q ? 30 : 20);
+    const offset = Number(request.query.offset) || 0;
     const sessionId = getSessionIdFromCookie(request.headers.cookie);
     const sessionUser = await getSession(sessionId);
     const restaurantIds = sessionUser ? await getRestaurantIdsManagedByUser(sessionUser.userId) : [];
     const vis = visibilityWhere(restaurantIds);
 
     const list = !q
-      ? await db.select().from(ingredients).where(vis).limit(50)
+      ? await db.select().from(ingredients).where(vis).orderBy(asc(ingredients.canonicalName)).limit(limit).offset(offset)
       : await db
           .select()
           .from(ingredients)
           .where(and(vis, ilike(ingredients.canonicalName, `%${q}%`)))
-          .limit(30);
+          .limit(limit);
 
     const mediaMap = await loadMediaByIngredientIds(list.map((i) => i.id));
     return reply.send(
