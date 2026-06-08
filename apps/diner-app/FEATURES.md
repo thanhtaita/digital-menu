@@ -71,7 +71,32 @@ What **guests** get on the public Next.js site. API contract: `GET /public/resta
 - **API endpoints exist** for personalized dish recommendations based on free-text preference descriptions (e.g. "I love spicy Thai food"). See `IMPLEMENTED_ROUTES.md` for `GET /users/me/recommendations` and related routes.
 - **UI not yet implemented** — a future "For You" page or widget will call these endpoints to surface ranked dishes per user.
 
+## Social layer (`/u`, `/feed`, `/posts`, `/r/[slug]?tab=posts`)
+
+- **Public user profiles** (`/u/[userId]`) — avatar (or procedural gradient fallback), display name, bio, follower/following counts, follow/unfollow button (hidden on own profile or when logged out), post grid.
+- **Social feed** (`/feed`, auth required) — chronological posts from followed users + own posts; "Load more" cursor-based pagination.
+- **Post detail** (`/posts/[postId]`) — media carousel (images + videos), like count, threaded comment section with reply support; comments and replies loaded client-side.
+- **Restaurant posts tab** (`/r/[slug]?tab=posts`) — community posts tagged to a restaurant; "Write a post" composer for logged-in users; tab switcher between Menu and Posts.
+- **Post composer** — textarea + optional photo attachment (up to 5 images); posts are created first then media uploaded sequentially.
+- **Like toggle** — optimistic UI on `PostCard`; requires login.
+- **Comment threading** — top-level comments with one level of replies; reply form inline per comment.
+- **Follow button** — optimistic follower count update; shows only for other users when logged in.
+- **Site header** updated — "Feed" nav link for logged-in users; display name now links to `/u/[userId]`.
+
+## AI Recommendations Chat (`/r/[slug]/chat`)
+
+- **Dedicated chat page** accessible via the "AI Picks" tab on any restaurant menu page.
+- **Conversational interface:** ask anything about the menu (mood, cravings, dietary needs) and receive personalized dish recommendations.
+- **Context-aware:** Gemini sees the full published menu (dish names, prices, descriptions) + the user's saved preference text and dietary restrictions.
+- **Recommendations panel:** each assistant response may include 1–5 highlighted dish cards below the message, with a brief reason for each pick.
+- **Conversation persistence:** session is stored server-side; re-opening the page resumes where you left off (no starting from scratch on revisit).
+- **Auto-summarization:** when a session grows long (>20 messages), older turns are summarized into a short context paragraph, keeping the experience fast without losing context.
+- **Prompt chips:** empty-state shows suggested starter prompts ("What's popular?", "Something light", etc.).
+- **Clear conversation** button resets the session completely.
+- Requires login; redirects to `/login` when unauthenticated.
+
 ## Not implemented here (see `PROGRESS.md`)
 
 - Diet-type dish filtering, Playwright E2E, user restriction sync/caching.
+- Social explore/trending page (Phase 2).
 

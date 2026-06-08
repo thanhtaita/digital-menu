@@ -72,10 +72,23 @@ Base URL: `http://localhost:3002/api/v1`
 - `POST /dishes/:dishId/ingredients`
 - `DELETE /dishes/:dishId/ingredients/:ingredientId`
 
+### AI Ingredient Suggestions
+- `POST /dishes/suggest-ingredients` — auth required (restaurant admin or superadmin). Body: `{ dishName, restaurantId, description?, contextPrompt?, cuisineType? }`. Calls Gemini AI to generate an ingredient list, then fuzzy-matches each suggestion against the ingredient dictionary. Returns `{ suggestions: [{ suggestedName, matchedIngredient?, confidence, shouldCreate, category? }], metadata: { model, tokensUsed, latencyMs } }`. Returns `503` if `GEMINI_API_KEY` is not set, `502` on AI provider failure.
+
 ### User restrictions (`/users/me/restrictions`)
 - `GET /users/me/restrictions` — list the caller's restrictions; requires session. Each row includes `ingredient` object (`id`, `canonicalName`, `slug`) when a specific ingredient is linked, otherwise `null`.
 - `POST /users/me/restrictions` — add a restriction; body `createRestrictionSchema` (`restrictionType`, `severity`, and either `ingredientId` or `dietType`). Returns `{ restriction }`.
 - `DELETE /users/me/restrictions/:id` — remove a restriction owned by the caller; `404` if not found or not owned.
+
+### User preferences (`/users/me/preferences`)
+- `GET /users/me/preferences` — return stored free-text preference and `hasEmbedding` flag. `404` when none set. Requires session.
+- `PUT /users/me/preferences` — upsert preference text (body: `{ preferenceText: string (10–2000 chars) }`). On update, invalidates the existing embedding so FastAPI re-embeds. Returns `201` on create, `200` on update.
+- `DELETE /users/me/preferences` — delete preference and cascade-removes embedding. `404` when none set.
+
+### Recommendations (`/users/me/recommendations`)
+- `GET /users/me/recommendations` — return ranked dish list via pgvector cosine similarity. Query params: `?restaurantId=<id>&limit=<n>` (default `10`, max `50`). Returns `400` with `NO_PREFERENCE` code when no preference is set; returns `202` with `EMBEDDING_PENDING` code when preference exists but has not been embedded yet. Stores results in `recommendations` table before returning.
+- `POST /recommendations/:id/feedback` — record an interaction on a recommendation. Body: `{ action: "clicked" | "selected" | "dismissed" }`. `404` if the recommendation doesn't belong to the caller.
+- `GET /users/me/recommendations/history` — paginated past recommendations with dish name/description. Query params: `?limit=<n>&offset=<n>` (default limit `20`, max `100`).
 
 ### QR code
 - `GET /restaurants/:id/qr` — returns a PNG QR code encoding `${DINER_APP_URL}/r/<slug>`. Auth: restaurant owner/admin or superadmin. `DINER_APP_URL` env var (default `http://localhost:3003`).
@@ -83,6 +96,39 @@ Base URL: `http://localhost:3002/api/v1`
 ### Public (no auth)
 - `GET /public/restaurants` — list active restaurants for diner discovery (`id`, `name`, `slug`, `description`, `logoUrl`).
 - `GET /public/restaurants/:slug/menu` — **Published** menus only (`is_published`), **active** restaurants (`is_active`). Nested menus → sections → dishes (each with **`media`**) → ingredients (each with **`media`**; `imageUrl` is derived from first gallery image when present). **Approved** ingredients globally, or **pending** when `requested_by_restaurant_id` matches that restaurant. Response shape: `publicMenuResponseSchema` in `@digital-menu/shared`.
+- `GET /public/restaurants/:slug/posts` — posts tagged to this restaurant, no auth required; cursor-based (`?before=<postId>&limit=<n>`); `likedByMe` always `false`.
+
+### Social — Profiles
+- `GET /users/:userId/profile` — optional auth; returns `userPublicProfileSchema` with `followerCount`, `followingCount`, `postCount`, `isFollowedByMe` (false when unauthenticated or own profile).
+- `GET /users/:userId/posts` — optional auth; cursor-based list of posts by this user; `postListResponseSchema`.
+- `PATCH /users/me/profile` — auth required; body `updateProfileSchema` (`displayName?`, `bio?`); cannot change email/role.
+- `POST /users/me/avatar` — auth required; multipart image; stores under `uploads/avatars/`; updates `users.avatar_url`; returns `{ avatarUrl }`.
+
+### Social — Follows
+- `POST /users/:userId/follow` — auth required; idempotent (no error on duplicate); 400 on self-follow.
+- `DELETE /users/:userId/follow` — auth required; 404 if not following.
+- `GET /users/:userId/followers` — optional auth; cursor-based (`?before=<followId>&limit=<n>`); `followListResponseSchema`.
+- `GET /users/:userId/following` — optional auth; same shape.
+
+### Social — Posts
+- `POST /posts` — auth required; body `createPostSchema` (`content`, `restaurantId?`); returns `{ post }`.
+- `GET /posts` — optional auth; query: `?restaurantId=<id>&authorId=<id>&before=<postId>&limit=<n>`; returns `postListResponseSchema`.
+- `GET /posts/:postId` — optional auth; returns `{ post }` with `likedByMe: false` when unauthenticated.
+- `DELETE /posts/:postId` — auth required; author only; 403 otherwise.
+- `POST /posts/:postId/like` — auth required; idempotent; returns `{ likeCount }`.
+- `DELETE /posts/:postId/like` — auth required; returns `{ likeCount }`.
+- `GET /posts/:postId/comments` — optional auth; top-level comments with `replies[]` nested one level.
+- `POST /posts/:postId/comments` — auth required; body `createCommentSchema` (`content`, `parentCommentId?`).
+- `DELETE /posts/:postId/comments/:commentId` — auth required; author only.
+- `POST /posts/:postId/media` — auth required; multipart; stores under `uploads/posts/`; returns `{ media }`.
+
+### Social — Feed
+- `GET /feed` — auth required; chronological posts from followed users + own posts; cursor-based (`?before=<postId>&limit=<n>`); `postListResponseSchema`.
+
+### AI Chat (`/public/restaurants/:slug/chat`)
+- `POST /public/restaurants/:slug/chat` — auth required; body `{ message }` (1–1000 chars); sends a message to the AI recommendation assistant and returns `{ message, recommendations: [{dishName, reason}], sessionId }`. Each session is scoped to the authenticated user × restaurant; conversation is persisted.
+- `GET /public/restaurants/:slug/chat/history` — auth required; returns `{ restaurantName, messages: [{id, role, content, createdAt}], summary }`. When a session has >20 messages, older turns are condensed into `summary` automatically.
+- `DELETE /public/restaurants/:slug/chat` — auth required; clears the entire session (messages + summary) for this user × restaurant.
 
 ---
 
@@ -109,10 +155,15 @@ Route fallback behavior:
 Base URL (dev): `http://localhost:3003`
 
 - `/` — restaurant discovery page (lists active restaurants and links to each `/r/[slug]` menu).
-- `/r/[slug]` — server-rendered public menu for restaurant `slug`; ingredient names link to `?i=<ingredient-slug>` and open a detail modal (native `<dialog>`). Logged-in users see restriction badges (blocked / warn) on dishes and highlighted ingredient pills.
+- `/r/[slug]` — server-rendered public menu for restaurant `slug`; ingredient names link to `?i=<ingredient-slug>` and open a detail modal. Logged-in users see restriction badges on dishes and highlighted ingredient pills.
+- `/r/[slug]?tab=posts` — community posts tab for that restaurant; "Write a post" composer for logged-in users.
+- `/r/[slug]/chat` — AI recommendations chat (auth required); conversational interface powered by Gemini; conversation persists across visits.
 - `/login` — email + password login for diner users.
 - `/register` — create a diner account (email, optional display name, password).
 - `/profile` — view account info and manage dietary restrictions (add allergy/dislike by ingredient search, add diet type, remove existing).
+- `/u/[userId]` — public user profile: avatar, bio, follower/following counts, follow/unfollow button, post grid.
+- `/feed` — social feed (auth required); chronological posts from followed users + own posts; "Load more" pagination.
+- `/posts/[postId]` — full post detail with media carousel and threaded comment section.
 
 ---
 

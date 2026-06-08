@@ -2,6 +2,16 @@ import type {
   RestrictionResponse,
   CreateRestriction,
   UserPreferenceResponse,
+  CreatePost,
+  CreateComment,
+  UpdateProfile,
+  PostResponse,
+  PostListResponse,
+  CommentListResponse,
+  CommentResponse,
+  UserPublicProfile,
+  FollowListResponse,
+  PostMediaItem,
 } from "@digital-menu/shared";
 
 const API_BASE =
@@ -12,6 +22,8 @@ export type CurrentUser = {
   email: string;
   role: string;
   displayName?: string | null;
+  avatarUrl?: string | null;
+  bio?: string | null;
 };
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -120,4 +132,164 @@ export async function apiUpsertPreferences(preferenceText: string): Promise<User
 
 export async function apiDeletePreferences(): Promise<void> {
   await request("/users/me/preferences", { method: "DELETE" });
+}
+
+// ─── Social: profiles ─────────────────────────────────────────────────────────
+
+export async function apiGetUserProfile(userId: number): Promise<UserPublicProfile> {
+  return request<UserPublicProfile>(`/users/${userId}/profile`);
+}
+
+export async function apiUpdateProfile(data: UpdateProfile): Promise<void> {
+  await request("/users/me/profile", { method: "PATCH", body: JSON.stringify(data) });
+}
+
+export async function apiUploadAvatar(file: File): Promise<{ avatarUrl: string }> {
+  const form = new FormData();
+  form.append("file", file);
+  return request<{ avatarUrl: string }>("/users/me/avatar", {
+    method: "POST",
+    body: form,
+    headers: {},
+  });
+}
+
+// ─── Social: follows ─────────────────────────────────────────────────────────
+
+export async function apiFollowUser(userId: number): Promise<void> {
+  await request(`/users/${userId}/follow`, { method: "POST" });
+}
+
+export async function apiUnfollowUser(userId: number): Promise<void> {
+  await request(`/users/${userId}/follow`, { method: "DELETE" });
+}
+
+export async function apiGetFollowers(userId: number, before?: number): Promise<FollowListResponse> {
+  const params = new URLSearchParams();
+  if (before !== undefined) params.set("before", String(before));
+  return request<FollowListResponse>(`/users/${userId}/followers?${params}`);
+}
+
+export async function apiGetFollowing(userId: number, before?: number): Promise<FollowListResponse> {
+  const params = new URLSearchParams();
+  if (before !== undefined) params.set("before", String(before));
+  return request<FollowListResponse>(`/users/${userId}/following?${params}`);
+}
+
+// ─── Social: posts ───────────────────────────────────────────────────────────
+
+export async function apiCreatePost(data: CreatePost): Promise<PostResponse> {
+  const res = await request<{ post: PostResponse }>("/posts", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+  return res.post;
+}
+
+export async function apiGetPost(postId: number): Promise<PostResponse> {
+  const res = await request<{ post: PostResponse }>(`/posts/${postId}`);
+  return res.post;
+}
+
+export async function apiDeletePost(postId: number): Promise<void> {
+  await request(`/posts/${postId}`, { method: "DELETE" });
+}
+
+export async function apiGetUserPosts(userId: number, before?: number): Promise<PostListResponse> {
+  const params = new URLSearchParams();
+  if (before !== undefined) params.set("before", String(before));
+  return request<PostListResponse>(`/users/${userId}/posts?${params}`);
+}
+
+export async function apiGetRestaurantPosts(slug: string, before?: number): Promise<PostListResponse> {
+  const params = new URLSearchParams();
+  if (before !== undefined) params.set("before", String(before));
+  return request<PostListResponse>(`/public/restaurants/${encodeURIComponent(slug)}/posts?${params}`);
+}
+
+export async function apiGetFeed(before?: number): Promise<PostListResponse> {
+  const params = new URLSearchParams();
+  if (before !== undefined) params.set("before", String(before));
+  return request<PostListResponse>(`/feed?${params}`);
+}
+
+export async function apiLikePost(postId: number): Promise<{ likeCount: number }> {
+  return request<{ likeCount: number }>(`/posts/${postId}/like`, { method: "POST" });
+}
+
+export async function apiUnlikePost(postId: number): Promise<{ likeCount: number }> {
+  return request<{ likeCount: number }>(`/posts/${postId}/like`, { method: "DELETE" });
+}
+
+export async function apiUploadPostMedia(postId: number, file: File): Promise<{ media: PostMediaItem[] }> {
+  const form = new FormData();
+  form.append("file", file);
+  return request<{ media: PostMediaItem[] }>(`/posts/${postId}/media`, {
+    method: "POST",
+    body: form,
+    headers: {},
+  });
+}
+
+// ─── Social: comments ────────────────────────────────────────────────────────
+
+export async function apiGetComments(postId: number): Promise<CommentListResponse> {
+  return request<CommentListResponse>(`/posts/${postId}/comments`);
+}
+
+export async function apiCreateComment(postId: number, data: CreateComment): Promise<CommentResponse> {
+  const res = await request<{ comment: CommentResponse }>(`/posts/${postId}/comments`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+  return res.comment;
+}
+
+export async function apiDeleteComment(postId: number, commentId: number): Promise<void> {
+  await request(`/posts/${postId}/comments/${commentId}`, { method: "DELETE" });
+}
+
+// ─── Social: feed ─────────────────────────────────────────────────────────────
+
+// (apiGetFeed already defined above)
+
+// ─── AI Chat ──────────────────────────────────────────────────────────────────
+
+export type ChatRecommendation = {
+  dishName: string;
+  reason: string;
+};
+
+export type ChatMessage = {
+  id: number;
+  role: "user" | "assistant";
+  content: string;
+  createdAt: string;
+};
+
+export type ChatSendResponse = {
+  message: string;
+  recommendations: ChatRecommendation[];
+  sessionId: number;
+};
+
+export type ChatHistory = {
+  restaurantName: string;
+  messages: ChatMessage[];
+  summary: string | null;
+};
+
+export async function apiSendChatMessage(slug: string, message: string): Promise<ChatSendResponse> {
+  return request<ChatSendResponse>(
+    `/public/restaurants/${encodeURIComponent(slug)}/chat`,
+    { method: "POST", body: JSON.stringify({ message }) }
+  );
+}
+
+export async function apiGetChatHistory(slug: string): Promise<ChatHistory> {
+  return request<ChatHistory>(`/public/restaurants/${encodeURIComponent(slug)}/chat/history`);
+}
+
+export async function apiClearChat(slug: string): Promise<void> {
+  await request(`/public/restaurants/${encodeURIComponent(slug)}/chat`, { method: "DELETE" });
 }

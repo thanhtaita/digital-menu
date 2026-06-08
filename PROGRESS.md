@@ -65,11 +65,20 @@
 
 ---
 
+### Step 4b — Social layer (Phase 1)
+
+- **Done:** DB migration `0007_social` — `bio` on `users`; new tables `user_follows`, `posts`, `post_media`, `post_likes`, `post_comments`.
+- **Done:** `packages/shared/src/social.ts` — Zod schemas and TypeScript types for all social features.
+- **Done:** API social routes — `social-follows.ts`, `social-posts.ts`, `social-feed.ts`, `social-profiles.ts`; `auth.ts` me endpoint extended with `avatarUrl`/`bio`; public restaurant posts endpoint added.
+- **Done:** Diner app — social components (`AvatarOrGradient`, `PostCard`, `PostFeed`, `PostGrid`, `PostComposer`, `CommentSection`, `FollowButton`, `UserProfileHeader`, `PostMediaCarousel`, `RestaurantPostsTab`) and new pages (`/u/[userId]`, `/feed`, `/posts/[postId]`, `/r/[slug]?tab=posts`).
+- **Not started:** Social explore/trending page (Phase 2), in-app notifications (Phase 2).
+
 ## Suggested next work (priority order)
 
-1. **QR admin UI** — Show/download QR code from the admin portal restaurant view (API route is done).
-2. **Diet-type restriction matching** — Map diet types to ingredient properties for dish-level filtering (Phase 2, needs data).
-3. **Hardening** — Rate limits, `pg_trgm` if missing, Playwright E2E, coverage goals.
+1. **Run DB migration** — `pnpm --filter @digital-menu/db drizzle:migrate` to apply `0007_social`.
+2. **QR admin UI** — Show/download QR code from the admin portal restaurant view (API route is done).
+3. **Diet-type restriction matching** — Map diet types to ingredient properties for dish-level filtering (Phase 2, needs data).
+4. **Hardening** — Rate limits, `pg_trgm` if missing, Playwright E2E, coverage goals.
 
 *(Reorder when product priorities change; keep “Done/Partial” sections honest.)*
 

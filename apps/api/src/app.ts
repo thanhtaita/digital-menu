@@ -15,6 +15,14 @@ import { dishIngredientRoutes } from "./routes/dish-ingredients.js";
 import { publicMenuRoutes } from "./routes/public-menu.js";
 import { restrictionRoutes } from "./routes/restrictions.js";
 import { qrRoutes } from "./routes/qr.js";
+import { aiSuggestionRoutes } from "./routes/ai-suggestions.js";
+import { preferenceRoutes } from "./routes/preferences.js";
+import { recommendationRoutes } from "./routes/recommendations.js";
+import { socialPostRoutes } from "./routes/social-posts.js";
+import { socialFeedRoutes } from "./routes/social-feed.js";
+import { socialFollowRoutes } from "./routes/social-follows.js";
+import { socialProfileRoutes } from "./routes/social-profiles.js";
+import { aiChatRoutes } from "./routes/ai-chat.js";
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
@@ -45,6 +53,14 @@ export async function buildApp() {
   await app.register(publicMenuRoutes, { prefix: "/api/v1/public" });
   await app.register(restrictionRoutes, { prefix: "/api/v1" });
   await app.register(qrRoutes, { prefix: "/api/v1" });
+  await app.register(aiSuggestionRoutes, { prefix: "/api/v1" });
+  await app.register(preferenceRoutes, { prefix: "/api/v1" });
+  await app.register(recommendationRoutes, { prefix: "/api/v1" });
+  await app.register(socialPostRoutes, { prefix: "/api/v1" });
+  await app.register(socialFeedRoutes, { prefix: "/api/v1" });
+  await app.register(socialFollowRoutes, { prefix: "/api/v1" });
+  await app.register(socialProfileRoutes, { prefix: "/api/v1" });
+  await app.register(aiChatRoutes, { prefix: "/api/v1/public" });
 
   return app;
 }

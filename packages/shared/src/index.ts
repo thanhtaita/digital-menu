@@ -7,4 +7,8 @@ export * from "./auth";
 export * from "./restaurant";
 export * from "./public-menu";
 export * from "./translation";
+export * from "./ai-suggestions";
+export * from "./recommendations";
+export * from "./social";
+export * from "./ai-chat";
 
