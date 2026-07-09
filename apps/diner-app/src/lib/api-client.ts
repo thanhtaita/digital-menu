@@ -12,6 +12,7 @@ import type {
   UserPublicProfile,
   FollowListResponse,
   PostMediaItem,
+  PublicMenuResponse,
 } from "@digital-menu/shared";
 
 const API_BASE =
@@ -265,6 +266,7 @@ export type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   createdAt: string;
+  recommendations?: ChatRecommendation[];
 };
 
 export type ChatSendResponse = {
@@ -286,10 +288,84 @@ export async function apiSendChatMessage(slug: string, message: string): Promise
   );
 }
 
+type ChatStreamChunk =
+  | { type: "chunk"; text: string }
+  | { type: "done"; message: string; recommendations: ChatRecommendation[]; sessionId: number }
+  | { type: "error"; code: string };
+
+export async function apiSendChatMessageStream(
+  slug: string,
+  message: string,
+  onChunk: (text: string) => void,
+  onDone: (result: ChatSendResponse) => void,
+  onError: (code: string) => void
+): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/public/restaurants/${encodeURIComponent(slug)}/chat/stream`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message })
+    });
+  } catch {
+    onError("NETWORK_ERROR");
+    return;
+  }
+
+  if (!response.ok || !response.body) {
+    onError("AI_ERROR");
+    return;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      try {
+        const event = JSON.parse(line.slice(6)) as ChatStreamChunk;
+        if (event.type === "chunk") {
+          onChunk(event.text);
+        } else if (event.type === "done") {
+          onDone({ message: event.message, recommendations: event.recommendations, sessionId: event.sessionId });
+        } else if (event.type === "error") {
+          onError(event.code);
+        }
+      } catch {
+        // ignore malformed SSE lines
+      }
+    }
+  }
+}
+
 export async function apiGetChatHistory(slug: string): Promise<ChatHistory> {
   return request<ChatHistory>(`/public/restaurants/${encodeURIComponent(slug)}/chat/history`);
 }
 
 export async function apiClearChat(slug: string): Promise<void> {
   await request(`/public/restaurants/${encodeURIComponent(slug)}/chat`, { method: "DELETE" });
+}
+
+export async function apiGetPublicMenu(slug: string): Promise<PublicMenuResponse> {
+  return request<PublicMenuResponse>(`/public/restaurants/${encodeURIComponent(slug)}/menu`);
+}
+
+export async function apiLikeDishRecommendation(
+  slug: string,
+  dishName: string,
+  liked: boolean
+): Promise<void> {
+  await request(`/public/restaurants/${encodeURIComponent(slug)}/chat/like`, {
+    method: "POST",
+    body: JSON.stringify({ dishName, liked }),
+  });
 }

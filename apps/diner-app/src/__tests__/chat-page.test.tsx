@@ -21,9 +21,11 @@ vi.mock("@/lib/auth-context", () => ({
 }));
 
 vi.mock("@/lib/api-client", () => ({
-  apiSendChatMessage: vi.fn(),
+  apiSendChatMessageStream: vi.fn(),
   apiGetChatHistory: vi.fn(),
   apiClearChat: vi.fn(),
+  apiGetPublicMenu: vi.fn(),
+  apiLikeDishRecommendation: vi.fn(),
 }));
 
 vi.mock("@/components/site-header", () => ({
@@ -32,7 +34,12 @@ vi.mock("@/components/site-header", () => ({
 
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { apiSendChatMessage, apiGetChatHistory, apiClearChat } from "@/lib/api-client";
+import {
+  apiSendChatMessageStream,
+  apiGetChatHistory,
+  apiClearChat,
+  apiGetPublicMenu,
+} from "@/lib/api-client";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -57,10 +64,9 @@ function setupDefaults() {
   vi.mocked(useRouter).mockReturnValue({ push: vi.fn() } as never);
   vi.mocked(useAuth).mockReturnValue({ user: MOCK_USER, loading: false } as never);
   vi.mocked(apiGetChatHistory).mockResolvedValue(EMPTY_HISTORY);
-  vi.mocked(apiSendChatMessage).mockResolvedValue({
-    message: "I recommend the Spicy Ramen!",
-    recommendations: [],
-    sessionId: 1,
+  vi.mocked(apiGetPublicMenu).mockResolvedValue({ menus: [] } as never);
+  vi.mocked(apiSendChatMessageStream).mockImplementation(async (_slug, _message, _onChunk, onDone) => {
+    onDone({ message: "I recommend the Spicy Ramen!", recommendations: [], sessionId: 1 });
   });
   vi.mocked(apiClearChat).mockResolvedValue(undefined);
   // Replace window.confirm with a mock that confirms by default.
@@ -140,12 +146,19 @@ describe("ChatPage", () => {
       expect(screen.getByText("I'm feeling adventurous")).toBeInTheDocument();
     });
 
-    it("clicking a starter chip fills the input field", async () => {
+    it("clicking a starter chip sends it immediately", async () => {
       const user = userEvent.setup();
       render(<ChatPage />);
       await screen.findByText("What's popular?");
       await user.click(screen.getByText("What's popular?"));
-      expect(screen.getByPlaceholderText("Ask for a recommendation…")).toHaveValue("What's popular?");
+      expect(await screen.findByText("I recommend the Spicy Ramen!")).toBeInTheDocument();
+      expect(apiSendChatMessageStream).toHaveBeenCalledWith(
+        SLUG,
+        "What's popular?",
+        expect.any(Function),
+        expect.any(Function),
+        expect.any(Function)
+      );
     });
   });
 
@@ -161,23 +174,31 @@ describe("ChatPage", () => {
       expect(await screen.findByText("I recommend the Spicy Ramen!")).toBeInTheDocument();
     });
 
-    it("calls apiSendChatMessage with the correct slug and trimmed message", async () => {
+    it("calls apiSendChatMessageStream with the correct slug and trimmed message", async () => {
       const user = userEvent.setup();
       render(<ChatPage />);
       const input = await screen.findByPlaceholderText("Ask for a recommendation…");
       await user.type(input, "What should I try?");
       await user.click(screen.getByRole("button", { name: /send/i }));
       await screen.findByText("I recommend the Spicy Ramen!");
-      expect(apiSendChatMessage).toHaveBeenCalledWith(SLUG, "What should I try?");
+      expect(apiSendChatMessageStream).toHaveBeenCalledWith(
+        SLUG,
+        "What should I try?",
+        expect.any(Function),
+        expect.any(Function),
+        expect.any(Function)
+      );
     });
 
     it("renders recommendation cards when the response includes recommendations", async () => {
-      vi.mocked(apiSendChatMessage).mockResolvedValue({
-        message: "You'd love these!",
-        recommendations: [
-          { dishName: "Tonkotsu Ramen", reason: "Rich and satisfying for cold days" },
-        ],
-        sessionId: 1,
+      vi.mocked(apiSendChatMessageStream).mockImplementation(async (_slug, _message, _onChunk, onDone) => {
+        onDone({
+          message: "You'd love these!",
+          recommendations: [
+            { dishName: "Tonkotsu Ramen", reason: "Rich and satisfying for cold days" },
+          ],
+          sessionId: 1,
+        });
       });
       const user = userEvent.setup();
       render(<ChatPage />);
@@ -189,13 +210,15 @@ describe("ChatPage", () => {
     });
 
     it("shows an error banner and removes the optimistic message when send fails", async () => {
-      vi.mocked(apiSendChatMessage).mockRejectedValue(new Error("Server error"));
+      vi.mocked(apiSendChatMessageStream).mockImplementation(async (_slug, _message, _onChunk, _onDone, onError) => {
+        onError("AI_ERROR");
+      });
       const user = userEvent.setup();
       render(<ChatPage />);
       const input = await screen.findByPlaceholderText("Ask for a recommendation…");
       await user.type(input, "Hello there");
       await user.click(screen.getByRole("button", { name: /send/i }));
-      expect(await screen.findByText("Failed to send message. Please try again.")).toBeInTheDocument();
+      expect(await screen.findByText("Failed to get response. Please try again.")).toBeInTheDocument();
       expect(screen.queryByText("Hello there")).not.toBeInTheDocument();
     });
 

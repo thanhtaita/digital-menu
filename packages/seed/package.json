@@ -4,10 +4,12 @@
   "private": true,
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "seed": "pnpm --filter @digital-menu/db build && tsx src/seed-test-data.ts"
+    "seed": "pnpm --filter @digital-menu/db build && tsx src/seed-test-data.ts",
+    "seed:menus": "pnpm --filter @digital-menu/db build && tsx src/seed-menu-data.ts"
   },
   "dependencies": {
     "@digital-menu/db": "workspace:*",
+    "bcrypt": "^6.0.0",
     "drizzle-orm": "^0.38.0",
     "pg": "^8.11.5"
   },

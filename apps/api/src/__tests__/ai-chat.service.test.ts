@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { buildSystemPrompt, getChatHistory, clearChatSession, processChat } from "../services/ai-chat.js";
+import { buildSystemPrompt, getChatHistory, clearChatSession, processChat, formatAssistantHistoryContent, formatMessageForChatHistory, shouldRunBatchSummarization, selectBatchMessagesForSummarization, RECENT_EXCHANGES_WINDOW, RECENT_MESSAGES_WINDOW } from "../services/ai-chat.js";
 
 // ─── DB mock ──────────────────────────────────────────────────────────────────
 
@@ -86,6 +86,71 @@ describe("buildSystemPrompt", () => {
   it("instructs the model not to invent dishes", () => {
     const prompt = buildSystemPrompt(name, menu, userCtx, null);
     expect(prompt.toLowerCase()).toContain("only recommend dishes that appear in the menu above");
+  });
+});
+
+// ─── formatAssistantHistoryContent ────────────────────────────────────────────
+
+describe("formatAssistantHistoryContent", () => {
+  it("returns content unchanged when there are no recommendations", () => {
+    expect(formatAssistantHistoryContent("Here are some options!", null)).toBe("Here are some options!");
+    expect(formatAssistantHistoryContent("Here are some options!", [])).toBe("Here are some options!");
+  });
+
+  it("appends recommended dishes with reasons for follow-up context", () => {
+    const result = formatAssistantHistoryContent("Here are some light options!", [
+      { dishName: "Tofu Quinoa Buddha Bowl", reason: "Fully plant-based" },
+      { dishName: "Plain Potato & Leek Soup", reason: "Gentle and mild" }
+    ]);
+
+    expect(result).toContain("Here are some light options!");
+    expect(result).toContain("Recommended dishes:");
+    expect(result).toContain("- Tofu Quinoa Buddha Bowl — Fully plant-based");
+    expect(result).toContain("- Plain Potato & Leek Soup — Gentle and mild");
+  });
+});
+
+describe("formatMessageForChatHistory", () => {
+  it("leaves user messages unchanged", () => {
+    expect(formatMessageForChatHistory("user", "Something light", null)).toEqual({
+      role: "user",
+      content: "Something light"
+    });
+  });
+
+  it("enriches assistant messages with stored recommendations", () => {
+    const result = formatMessageForChatHistory("assistant", "Here are some options!", [
+      { dishName: "Spicy Tuna Roll", reason: "Matches your sushi preference" }
+    ]);
+
+    expect(result.role).toBe("assistant");
+    expect(result.content).toContain("Spicy Tuna Roll");
+  });
+});
+
+// ─── batch summarization helpers ──────────────────────────────────────────────
+
+describe("batch summarization helpers", () => {
+  it("does not summarize when at or below 10 exchanges (20 DB rows)", () => {
+    const rows = Array.from({ length: RECENT_MESSAGES_WINDOW }, (_, i) => i);
+    expect(shouldRunBatchSummarization(rows.length)).toBe(false);
+    expect(selectBatchMessagesForSummarization(rows)).toBeNull();
+  });
+
+  it("summarizes the first 10 exchanges when the 11th exchange completes (22 DB rows)", () => {
+    const rows = Array.from({ length: RECENT_MESSAGES_WINDOW + 2 }, (_, i) => i);
+    expect(shouldRunBatchSummarization(rows.length)).toBe(true);
+    expect(selectBatchMessagesForSummarization(rows)).toEqual(rows.slice(0, RECENT_MESSAGES_WINDOW));
+  });
+
+  it("still summarizes only one exchange-batch at a time when more are pending", () => {
+    const rows = Array.from({ length: RECENT_MESSAGES_WINDOW * 2 + 2 }, (_, i) => i);
+    expect(selectBatchMessagesForSummarization(rows)?.length).toBe(RECENT_MESSAGES_WINDOW);
+  });
+
+  it("uses 10 exchanges and 20 DB rows per window", () => {
+    expect(RECENT_EXCHANGES_WINDOW).toBe(10);
+    expect(RECENT_MESSAGES_WINDOW).toBe(20);
   });
 });
 
@@ -222,7 +287,7 @@ describe("processChat", () => {
       .mockReturnValueOnce(dbChain(overrides.restrictions ?? []) as ReturnType<typeof db.select>)
       .mockReturnValueOnce(dbChain(overrides.recentMessages ?? []) as ReturnType<typeof db.select>)
       // Fallback for summarizeSession's allMessages check (fire-and-forget after processChat).
-      // Returning [] ensures summarizeSession returns early ([] <= SUMMARIZE_THRESHOLD).
+      // Returning [] ensures summarizeSession returns early (≤ 10 exchanges / 20 DB rows).
       .mockReturnValue(dbChain([]) as ReturnType<typeof db.select>);
 
     vi.mocked(db.insert).mockReturnValue(dbChain([]) as ReturnType<typeof db.insert>);
@@ -296,5 +361,35 @@ describe("processChat", () => {
     expect(callArg.history).toHaveLength(2);
     expect(callArg.history[0].role).toBe("user");
     expect(callArg.history[1].role).toBe("assistant");
+  });
+
+  it("includes stored recommendations in assistant history for follow-up questions", async () => {
+    setupProcessChatMocks({
+      recentMessages: [
+        {
+          role: "assistant",
+          content: "Here are some light options!",
+          recommendations: [
+            { dishName: "Tofu Quinoa Buddha Bowl", reason: "Fully plant-based" },
+            { dishName: "Plain Potato & Leek Soup", reason: "Gentle and mild" }
+          ]
+        },
+        { role: "user", content: "Something light" }
+      ]
+    });
+
+    vi.mocked(chat).mockResolvedValue({
+      text: JSON.stringify({ message: "Only the tofu bowl is vegan.", recommendations: [] }),
+      tokensUsed: 8,
+      model: "gemini-2.0-flash",
+      provider: "gemini"
+    });
+
+    await processChat({ userId: 1, restaurantId: 5, message: "Are they all vegan?" });
+
+    const assistantHistory = vi.mocked(chat).mock.calls[0][0].history[1];
+    expect(assistantHistory.content).toContain("Recommended dishes:");
+    expect(assistantHistory.content).toContain("Tofu Quinoa Buddha Bowl");
+    expect(assistantHistory.content).toContain("Plain Potato & Leek Soup");
   });
 });

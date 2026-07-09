@@ -224,6 +224,175 @@ const TEST_INGREDIENTS: Array<{
     isCommonAllergen: false,
     commonAllergenGroup: null,
     aliases: ["cumino", "cumin seed"]
+  },
+  // Polar Palate menu (ai-test-menu-seed.json)
+  {
+    canonicalName: "Durian",
+    slug: "durian",
+    description: "Durian fruit. Strong aroma; polarizing flavor.",
+    isCommonAllergen: false,
+    commonAllergenGroup: null,
+    aliases: ["durian fruit"]
+  },
+  {
+    canonicalName: "Coconut milk",
+    slug: "coconut-milk",
+    description: "Coconut milk from pressed coconut flesh.",
+    isCommonAllergen: false,
+    commonAllergenGroup: null,
+    aliases: ["coconut cream", "lait de coco"]
+  },
+  {
+    canonicalName: "Sugar",
+    slug: "sugar",
+    description: "Refined sugar (sucrose).",
+    isCommonAllergen: false,
+    commonAllergenGroup: null,
+    aliases: ["sucrose", "sucre", "zucchero"]
+  },
+  {
+    canonicalName: "Mustard",
+    slug: "mustard",
+    description: "Mustard seed or prepared mustard.",
+    isCommonAllergen: false,
+    commonAllergenGroup: null,
+    aliases: ["moutarde", "senape"]
+  },
+  {
+    canonicalName: "Blue cheese",
+    slug: "blue-cheese",
+    description: "Mold-ripened blue cheese. Contains milk.",
+    isCommonAllergen: false,
+    commonAllergenGroup: "milk",
+    aliases: ["roquefort", "gorgonzola", "stilton"]
+  },
+  {
+    canonicalName: "Chili pepper",
+    slug: "chili-pepper",
+    description: "Hot chili peppers (capsaicin). Not a common allergen.",
+    isCommonAllergen: false,
+    commonAllergenGroup: null,
+    aliases: ["chile", "hot pepper", "ghost pepper", "habanero", "jalapeño"]
+  },
+  {
+    canonicalName: "Liver",
+    slug: "liver",
+    description: "Organ meat (liver). Offal.",
+    isCommonAllergen: false,
+    commonAllergenGroup: null,
+    aliases: ["foie", "offal liver"]
+  },
+  {
+    canonicalName: "Lamb",
+    slug: "lamb",
+    description: "Lamb, red meat.",
+    isCommonAllergen: false,
+    commonAllergenGroup: null,
+    aliases: ["agneau", "agnello", "mutton"]
+  },
+  {
+    canonicalName: "Pork",
+    slug: "pork",
+    description: "Pork, red meat.",
+    isCommonAllergen: false,
+    commonAllergenGroup: null,
+    aliases: ["porc", "maiale", "bacon", "ham"]
+  },
+  {
+    canonicalName: "Capers",
+    slug: "capers",
+    description: "Pickled caper buds.",
+    isCommonAllergen: false,
+    commonAllergenGroup: null,
+    aliases: ["caper", "câpres"]
+  },
+  {
+    canonicalName: "Tofu",
+    slug: "tofu",
+    description: "Soybean curd. Contains soy.",
+    isCommonAllergen: false,
+    commonAllergenGroup: "soybeans",
+    aliases: ["bean curd", "soy curd"]
+  },
+  {
+    canonicalName: "Quinoa",
+    slug: "quinoa",
+    description: "Quinoa seed, gluten-free grain.",
+    isCommonAllergen: false,
+    commonAllergenGroup: null,
+    aliases: ["quinua"]
+  },
+  {
+    canonicalName: "Lime",
+    slug: "lime",
+    description: "Lime citrus fruit.",
+    isCommonAllergen: false,
+    commonAllergenGroup: null,
+    aliases: ["limes", "citron vert", "limetta"]
+  },
+  {
+    canonicalName: "Anchovy",
+    slug: "anchovy",
+    description: "Anchovy, small oily fish.",
+    isCommonAllergen: false,
+    commonAllergenGroup: "fish",
+    aliases: ["anchovies", "anchois", "acciuga"]
+  },
+  {
+    canonicalName: "Olive",
+    slug: "olive",
+    description: "Olives, brined or cured fruit.",
+    isCommonAllergen: false,
+    commonAllergenGroup: null,
+    aliases: ["olives", "olive fruit"]
+  },
+  {
+    canonicalName: "Tripe",
+    slug: "tripe",
+    description: "Beef or lamb stomach lining. Offal.",
+    isCommonAllergen: false,
+    commonAllergenGroup: null,
+    aliases: ["honeycomb tripe", "offal tripe"]
+  },
+  {
+    canonicalName: "Octopus",
+    slug: "octopus",
+    description: "Octopus, cephalopod seafood.",
+    isCommonAllergen: false,
+    commonAllergenGroup: "shellfish",
+    aliases: ["polpo", "poulpe"]
+  },
+  {
+    canonicalName: "Beet",
+    slug: "beet",
+    description: "Beetroot, earthy root vegetable.",
+    isCommonAllergen: false,
+    commonAllergenGroup: null,
+    aliases: ["beetroot", "beets", "betterave"]
+  },
+  {
+    canonicalName: "Goat cheese",
+    slug: "goat-cheese",
+    description: "Cheese made from goat milk. Contains milk.",
+    isCommonAllergen: false,
+    commonAllergenGroup: "milk",
+    aliases: ["chèvre", "caprino"]
+  },
+  {
+    canonicalName: "Chocolate",
+    slug: "chocolate",
+    description: "Chocolate / cocoa. May contain milk.",
+    isCommonAllergen: false,
+    commonAllergenGroup: "milk",
+    aliases: ["cocoa", "dark chocolate", "chocolat"]
+  },
+  {
+    canonicalName: "Cream",
+    slug: "cream",
+    description: "Dairy cream. Contains milk.",
+    isCommonAllergen: false,
+    commonAllergenGroup: "milk",
+    aliases: ["heavy cream", "crème", "panna"]
   }
 ];
 
@@ -246,9 +415,9 @@ async function seed() {
         requestedByRestaurantId: null
       } as NewIngredient)
       .onConflictDoUpdate({
-        target: ingredients.canonicalName,
+        target: ingredients.slug,
         set: {
-          slug: row.slug,
+          canonicalName: row.canonicalName,
           description: row.description,
           isCommonAllergen: row.isCommonAllergen,
           commonAllergenGroup: row.commonAllergenGroup,
@@ -262,16 +431,16 @@ async function seed() {
       const [existing] = await db
         .select({ id: ingredients.id })
         .from(ingredients)
-        .where(eq(ingredients.canonicalName, row.canonicalName))
+        .where(eq(ingredients.slug, row.slug))
         .limit(1);
-      if (!existing) throw new Error(`Failed to upsert ingredient: ${row.canonicalName}`);
+      if (!existing) throw new Error(`Failed to upsert ingredient: ${row.slug}`);
     }
 
     const ingredientId = inserted?.id ?? (
       await db
         .select({ id: ingredients.id })
         .from(ingredients)
-        .where(eq(ingredients.canonicalName, row.canonicalName))
+        .where(eq(ingredients.slug, row.slug))
         .limit(1)
     )[0].id;
 

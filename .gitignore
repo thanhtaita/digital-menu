@@ -12,3 +12,6 @@ dist/
 
 # Local API uploads (dish/ingredient images)
 apps/api/uploads/
+
+# Local AI chat debug logs (prompts, responses, metadata)
+apps/api/logs/

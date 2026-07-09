@@ -4,6 +4,7 @@ import cookie from "@fastify/cookie";
 import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
 import { ensureUploadRoot, getUploadRoot, MAX_MULTIPART_BYTES } from "./lib/uploads.js";
+import { ensureAiChatLogsRoot } from "./lib/ai-chat-logger.js";
 import { healthRoutes } from "./routes/health.js";
 import { ingredientRoutes } from "./routes/ingredients.js";
 import { authRoutes } from "./routes/auth.js";
@@ -31,6 +32,7 @@ export async function buildApp() {
   await app.register(cookie, { parseOptions: {} });
 
   await ensureUploadRoot();
+  await ensureAiChatLogsRoot();
   await app.register(multipart, {
     limits: { fileSize: MAX_MULTIPART_BYTES }
   });

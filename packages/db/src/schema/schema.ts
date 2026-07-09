@@ -335,7 +335,7 @@ export const dishEmbeddings = pgTable(
   },
   (table) => ({
     dishIdUnique: uniqueIndex("dish_embeddings_dish_id_unique").on(table.dishId),
-    vectorIdx: index("dish_embeddings_vector_idx").on(table.embedding)
+    vectorIdx: index("dish_embeddings_vector_idx").using("hnsw", table.embedding.op("vector_cosine_ops"))
   })
 );
 
@@ -511,6 +511,7 @@ export const aiChatSessions = pgTable(
     userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     restaurantId: integer("restaurant_id").notNull().references(() => restaurants.id, { onDelete: "cascade" }),
     conversationSummary: text("conversation_summary"),
+    likedDishNames: jsonb("liked_dish_names").$type<string[]>(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull()
   },
@@ -526,6 +527,7 @@ export const aiChatMessages = pgTable(
     sessionId: integer("session_id").notNull().references(() => aiChatSessions.id, { onDelete: "cascade" }),
     role: text("role").notNull(),
     content: text("content").notNull(),
+    recommendations: jsonb("recommendations").$type<Array<{ dishName: string; reason: string }>>(),
     createdAt: timestamp("created_at").defaultNow().notNull()
   },
   (table) => ({

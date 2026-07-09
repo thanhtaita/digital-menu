@@ -86,3 +86,65 @@ export async function openAiChat(request: AiChatRequest): Promise<AiCompletionRe
     provider: "openai"
   };
 }
+
+export async function* openAiChatStream(request: AiChatRequest): AsyncGenerator<string> {
+  const messages: OpenAiMessage[] = [{ role: "system", content: request.systemPrompt }];
+
+  for (const message of request.history) {
+    messages.push({
+      role: message.role === "assistant" ? "assistant" : "user",
+      content: message.content
+    });
+  }
+
+  messages.push({ role: "user", content: request.userMessage });
+
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${getApiKey()}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: request.model,
+      messages,
+      temperature: request.temperature,
+      max_tokens: request.maxOutputTokens,
+      ...(request.jsonMode ? { response_format: { type: "json_object" } } : {}),
+      stream: true
+    })
+  });
+
+  if (!response.ok || !response.body) {
+    const text = await response.text();
+    throw new Error(`OpenAI stream request failed (${response.status}): ${text}`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data: ")) continue;
+      const payload = trimmed.slice(6);
+      if (payload === "[DONE]") return;
+      try {
+        const parsed = JSON.parse(payload) as {
+          choices?: Array<{ delta?: { content?: string | null } }>;
+        };
+        const content = parsed.choices?.[0]?.delta?.content;
+        if (content) yield content;
+      } catch {
+        // ignore malformed chunks
+      }
+    }
+  }
+}

@@ -1,0 +1,301 @@
+{
+  "restaurants": [
+    {
+      "owner": {
+        "email": "chef@polar-palate.test",
+        "password": "changeme123",
+        "displayName": "Alex Chen",
+        "role": "restaurant_admin"
+      },
+      "restaurant": {
+        "slug": "polar-palate",
+        "name": "Polar Palate",
+        "description": "A deliberately divisive test kitchen — love-it-or-hate-it dishes for AI recommendation QA.",
+        "logoUrl": null,
+        "isActive": true
+      },
+      "menus": [
+        {
+          "name": "Polarizing Tasting Menu",
+          "isPublished": true,
+          "displayOrder": 0,
+          "sections": [
+            {
+              "name": "Love It or Leave It",
+              "displayOrder": 0,
+              "dishes": [
+                {
+                  "name": "Durian Coconut Sticky Rice",
+                  "description": "Sweet glutinous rice with ripe durian and coconut milk. Intensely aromatic — adored by some, avoided by many.",
+                  "price": "14.00",
+                  "imageUrl": null,
+                  "isAvailable": true,
+                  "displayOrder": 0,
+                  "media": [],
+                  "ingredients": [
+                    { "slug": "rice", "isOptional": false, "isHidden": false, "displayOrder": 0 },
+                    { "slug": "durian", "isOptional": false, "isHidden": false, "displayOrder": 1 },
+                    { "slug": "coconut-milk", "isOptional": false, "isHidden": false, "displayOrder": 2 },
+                    { "slug": "sugar", "isOptional": true, "isHidden": true, "displayOrder": 3 }
+                  ],
+                  "translations": []
+                },
+                {
+                  "name": "Chilled Natto over Rice",
+                  "description": "Fermented soybeans with warm rice. Sticky, pungent, and divisive on texture alone.",
+                  "price": "11.00",
+                  "imageUrl": null,
+                  "isAvailable": true,
+                  "displayOrder": 1,
+                  "media": [],
+                  "ingredients": [
+                    { "slug": "rice", "isOptional": false, "isHidden": false, "displayOrder": 0 },
+                    { "slug": "soybeans", "isOptional": false, "isHidden": false, "displayOrder": 1 },
+                    { "slug": "mustard", "isOptional": true, "isHidden": false, "displayOrder": 2 }
+                  ],
+                  "translations": []
+                },
+                {
+                  "name": "Blue Cheese & Walnut Crostini",
+                  "description": "Toasted bread with sharp blue cheese and crunchy walnuts. Bold and polarizing.",
+                  "price": "12.50",
+                  "imageUrl": null,
+                  "isAvailable": true,
+                  "displayOrder": 2,
+                  "media": [],
+                  "ingredients": [
+                    { "slug": "wheat", "isOptional": false, "isHidden": false, "displayOrder": 0 },
+                    { "slug": "blue-cheese", "isOptional": false, "isHidden": false, "displayOrder": 1 },
+                    { "slug": "tree-nuts", "isOptional": false, "isHidden": false, "displayOrder": 2 },
+                    { "slug": "olive-oil", "isOptional": false, "isHidden": true, "displayOrder": 3 }
+                  ],
+                  "translations": []
+                }
+              ]
+            },
+            {
+              "name": "Fire & Ice",
+              "displayOrder": 1,
+              "dishes": [
+                {
+                  "name": "Ghost Pepper Chicken Wings",
+                  "description": "Crispy wings glazed with ghost pepper and butter. Extremely spicy — not for mild palates.",
+                  "price": "16.00",
+                  "imageUrl": null,
+                  "isAvailable": true,
+                  "displayOrder": 0,
+                  "media": [],
+                  "ingredients": [
+                    { "slug": "chicken", "isOptional": false, "isHidden": false, "displayOrder": 0 },
+                    { "slug": "chili-pepper", "isOptional": false, "isHidden": false, "displayOrder": 1 },
+                    { "slug": "butter", "isOptional": false, "isHidden": false, "displayOrder": 2 },
+                    { "slug": "garlic", "isOptional": true, "isHidden": false, "displayOrder": 3 }
+                  ],
+                  "translations": []
+                },
+                {
+                  "name": "Plain Potato & Leek Soup",
+                  "description": "Gentle potato soup with leek and olive oil only. No spice, no cream, no meat — deliberately mild.",
+                  "price": "9.00",
+                  "imageUrl": null,
+                  "isAvailable": true,
+                  "displayOrder": 1,
+                  "media": [],
+                  "ingredients": [
+                    { "slug": "potato", "isOptional": false, "isHidden": false, "displayOrder": 0 },
+                    { "slug": "onion", "isOptional": false, "isHidden": false, "displayOrder": 1 },
+                    { "slug": "olive-oil", "isOptional": false, "isHidden": false, "displayOrder": 2 },
+                    { "slug": "salt", "isOptional": false, "isHidden": true, "displayOrder": 3 }
+                  ],
+                  "translations": []
+                }
+              ]
+            },
+            {
+              "name": "Offal & Red Meat",
+              "displayOrder": 2,
+              "dishes": [
+                {
+                  "name": "Pan-Seared Lamb Liver",
+                  "description": "Thin-cut lamb liver with caramelized onion. Rich, metallic, and unmistakably organ meat.",
+                  "price": "19.00",
+                  "imageUrl": null,
+                  "isAvailable": true,
+                  "displayOrder": 0,
+                  "media": [],
+                  "ingredients": [
+                    { "slug": "liver", "isOptional": false, "isHidden": false, "displayOrder": 0 },
+                    { "slug": "lamb", "isOptional": false, "isHidden": false, "displayOrder": 1 },
+                    { "slug": "onion", "isOptional": false, "isHidden": false, "displayOrder": 2 },
+                    { "slug": "olive-oil", "isOptional": false, "isHidden": true, "displayOrder": 3 },
+                    { "slug": "black-pepper", "isOptional": false, "isHidden": false, "displayOrder": 4 }
+                  ],
+                  "translations": []
+                },
+                {
+                  "name": "Crispy Pork Belly Bites",
+                  "description": "Slow-rendered pork belly with soy glaze and garlic. Fatty, savory, and very much not vegetarian.",
+                  "price": "17.50",
+                  "imageUrl": null,
+                  "isAvailable": true,
+                  "displayOrder": 1,
+                  "media": [],
+                  "ingredients": [
+                    { "slug": "pork", "isOptional": false, "isHidden": false, "displayOrder": 0 },
+                    { "slug": "soybeans", "isOptional": false, "isHidden": false, "displayOrder": 1 },
+                    { "slug": "garlic", "isOptional": false, "isHidden": false, "displayOrder": 2 },
+                    { "slug": "sugar", "isOptional": true, "isHidden": true, "displayOrder": 3 }
+                  ],
+                  "translations": []
+                },
+                {
+                  "name": "Classic Beef Tartare",
+                  "description": "Hand-cut raw beef with egg yolk and minced onion. For adventurous carnivores only.",
+                  "price": "21.00",
+                  "imageUrl": null,
+                  "isAvailable": true,
+                  "displayOrder": 2,
+                  "media": [],
+                  "ingredients": [
+                    { "slug": "beef", "isOptional": false, "isHidden": false, "displayOrder": 0 },
+                    { "slug": "eggs", "isOptional": false, "isHidden": false, "displayOrder": 1 },
+                    { "slug": "onion", "isOptional": false, "isHidden": false, "displayOrder": 2 },
+                    { "slug": "black-pepper", "isOptional": false, "isHidden": false, "displayOrder": 3 },
+                    { "slug": "capers", "isOptional": true, "isHidden": false, "displayOrder": 4 }
+                  ],
+                  "translations": []
+                }
+              ]
+            },
+            {
+              "name": "Plant vs Animal",
+              "displayOrder": 3,
+              "dishes": [
+                {
+                  "name": "Tofu Quinoa Buddha Bowl",
+                  "description": "Marinated tofu, quinoa, and sesame. Fully plant-based and gluten-free.",
+                  "price": "15.00",
+                  "imageUrl": null,
+                  "isAvailable": true,
+                  "displayOrder": 0,
+                  "media": [],
+                  "ingredients": [
+                    { "slug": "tofu", "isOptional": false, "isHidden": false, "displayOrder": 0 },
+                    { "slug": "quinoa", "isOptional": false, "isHidden": false, "displayOrder": 1 },
+                    { "slug": "soybeans", "isOptional": false, "isHidden": true, "displayOrder": 2 },
+                    { "slug": "sesame", "isOptional": false, "isHidden": false, "displayOrder": 3 }
+                  ],
+                  "translations": []
+                },
+                {
+                  "name": "Cilantro-Lime Fish Ceviche",
+                  "description": "Raw fish cured in lime with a heavy handful of fresh cilantro. Herb-forward and bright.",
+                  "price": "18.00",
+                  "imageUrl": null,
+                  "isAvailable": true,
+                  "displayOrder": 1,
+                  "media": [],
+                  "ingredients": [
+                    { "slug": "fish", "isOptional": false, "isHidden": false, "displayOrder": 0 },
+                    { "slug": "cilantro", "isOptional": false, "isHidden": false, "displayOrder": 1 },
+                    { "slug": "lime", "isOptional": false, "isHidden": false, "displayOrder": 2 },
+                    { "slug": "onion", "isOptional": false, "isHidden": false, "displayOrder": 3 },
+                    { "slug": "chili-pepper", "isOptional": true, "isHidden": false, "displayOrder": 4 }
+                  ],
+                  "translations": []
+                },
+                {
+                  "name": "Anchovy & Olive Flatbread",
+                  "description": "Crisp flatbread topped with salty anchovies and briny olives. Intensely savory and fishy.",
+                  "price": "14.50",
+                  "imageUrl": null,
+                  "isAvailable": true,
+                  "displayOrder": 2,
+                  "media": [],
+                  "ingredients": [
+                    { "slug": "wheat", "isOptional": false, "isHidden": false, "displayOrder": 0 },
+                    { "slug": "anchovy", "isOptional": false, "isHidden": false, "displayOrder": 1 },
+                    { "slug": "olive", "isOptional": false, "isHidden": false, "displayOrder": 2 },
+                    { "slug": "tomato", "isOptional": false, "isHidden": false, "displayOrder": 3 },
+                    { "slug": "cheese", "isOptional": true, "isHidden": false, "displayOrder": 4 }
+                  ],
+                  "translations": []
+                }
+              ]
+            },
+            {
+              "name": "Texture & Surprise",
+              "displayOrder": 4,
+              "dishes": [
+                {
+                  "name": "Spicy Tripe Stew",
+                  "description": "Honeycomb tripe braised with chili and cumin. Chewy offal in a bold broth.",
+                  "price": "16.50",
+                  "imageUrl": null,
+                  "isAvailable": true,
+                  "displayOrder": 0,
+                  "media": [],
+                  "ingredients": [
+                    { "slug": "tripe", "isOptional": false, "isHidden": false, "displayOrder": 0 },
+                    { "slug": "chili-pepper", "isOptional": false, "isHidden": false, "displayOrder": 1 },
+                    { "slug": "cumin", "isOptional": false, "isHidden": false, "displayOrder": 2 },
+                    { "slug": "onion", "isOptional": false, "isHidden": false, "displayOrder": 3 }
+                  ],
+                  "translations": []
+                },
+                {
+                  "name": "Chargrilled Octopus",
+                  "description": "Tender charred octopus with lemon and olive oil. Rubber-band texture when done wrong — here it's deliberate.",
+                  "price": "23.00",
+                  "imageUrl": null,
+                  "isAvailable": true,
+                  "displayOrder": 1,
+                  "media": [],
+                  "ingredients": [
+                    { "slug": "octopus", "isOptional": false, "isHidden": false, "displayOrder": 0 },
+                    { "slug": "olive-oil", "isOptional": false, "isHidden": false, "displayOrder": 1 },
+                    { "slug": "lemon", "isOptional": false, "isHidden": false, "displayOrder": 2 },
+                    { "slug": "garlic", "isOptional": true, "isHidden": false, "displayOrder": 3 }
+                  ],
+                  "translations": []
+                },
+                {
+                  "name": "Roasted Beet & Goat Cheese Salad",
+                  "description": "Earthy roasted beets with tangy goat cheese. Beets split rooms every time.",
+                  "price": "13.00",
+                  "imageUrl": null,
+                  "isAvailable": true,
+                  "displayOrder": 2,
+                  "media": [],
+                  "ingredients": [
+                    { "slug": "beet", "isOptional": false, "isHidden": false, "displayOrder": 0 },
+                    { "slug": "goat-cheese", "isOptional": false, "isHidden": false, "displayOrder": 1 },
+                    { "slug": "olive-oil", "isOptional": false, "isHidden": true, "displayOrder": 2 }
+                  ],
+                  "translations": []
+                },
+                {
+                  "name": "Chocolate Chili Pot de Crème",
+                  "description": "Silky dark chocolate custard with a slow-building chili heat. Sweet dessert that bites back.",
+                  "price": "10.00",
+                  "imageUrl": null,
+                  "isAvailable": true,
+                  "displayOrder": 3,
+                  "media": [],
+                  "ingredients": [
+                    { "slug": "chocolate", "isOptional": false, "isHidden": false, "displayOrder": 0 },
+                    { "slug": "cream", "isOptional": false, "isHidden": false, "displayOrder": 1 },
+                    { "slug": "eggs", "isOptional": false, "isHidden": false, "displayOrder": 2 },
+                    { "slug": "chili-pepper", "isOptional": false, "isHidden": false, "displayOrder": 3 },
+                    { "slug": "sugar", "isOptional": false, "isHidden": true, "displayOrder": 4 }
+                  ],
+                  "translations": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

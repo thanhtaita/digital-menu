@@ -1,0 +1,144 @@
+{
+  "restaurants": [
+    {
+      "owner": {
+        "email": "chef@bella-cucina.test",
+        "password": "changeme123",
+        "displayName": "Marco Rossi",
+        "role": "restaurant_admin"
+      },
+      "restaurant": {
+        "slug": "bella-cucina",
+        "name": "Bella Cucina",
+        "description": "Neighborhood Italian trattoria.",
+        "logoUrl": "/uploads/restaurants/bella-cucina/logo.png",
+        "isActive": true
+      },
+      "menus": [
+        {
+          "name": "Dinner",
+          "isPublished": true,
+          "displayOrder": 0,
+          "sections": [
+            {
+              "name": "Antipasti",
+              "displayOrder": 0,
+              "dishes": [
+                {
+                  "name": "Bruschetta al Pomodoro",
+                  "description": "Grilled bread with fresh tomatoes, garlic, and basil.",
+                  "price": "9.50",
+                  "imageUrl": "/uploads/dishes/bruschetta.jpg",
+                  "isAvailable": true,
+                  "displayOrder": 0,
+                  "media": [
+                    {
+                      "url": "/uploads/dishes/bruschetta.jpg",
+                      "kind": "image",
+                      "displayOrder": 0
+                    }
+                  ],
+                  "ingredients": [
+                    { "slug": "wheat", "isOptional": false, "isHidden": false, "displayOrder": 0 },
+                    { "slug": "tomato", "isOptional": false, "isHidden": false, "displayOrder": 1 },
+                    { "slug": "garlic", "isOptional": false, "isHidden": false, "displayOrder": 2 },
+                    { "slug": "basil", "isOptional": false, "isHidden": false, "displayOrder": 3 },
+                    { "slug": "olive-oil", "isOptional": false, "isHidden": false, "displayOrder": 4 }
+                  ],
+                  "translations": [
+                    {
+                      "locale": "it",
+                      "name": "Bruschetta al Pomodoro",
+                      "description": "Pane grigliato con pomodori freschi, aglio e basilico."
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "Primi",
+              "displayOrder": 1,
+              "dishes": [
+                {
+                  "name": "Risotto ai Funghi",
+                  "description": "Creamy arborio rice with wild mushrooms and parmesan.",
+                  "price": "18.00",
+                  "imageUrl": null,
+                  "isAvailable": true,
+                  "displayOrder": 0,
+                  "media": [],
+                  "ingredients": [
+                    { "slug": "rice", "isOptional": false, "isHidden": false, "displayOrder": 0 },
+                    { "slug": "butter", "isOptional": false, "isHidden": false, "displayOrder": 1 },
+                    { "slug": "cheese", "isOptional": false, "isHidden": false, "displayOrder": 2 },
+                    { "slug": "garlic", "isOptional": true, "isHidden": false, "displayOrder": 3 },
+                    { "slug": "onion", "isOptional": false, "isHidden": true, "displayOrder": 4 }
+                  ],
+                  "translations": []
+                }
+              ]
+            },
+            {
+              "name": "Secondi",
+              "displayOrder": 2,
+              "dishes": [
+                {
+                  "name": "Pollo al Limone",
+                  "description": "Pan-seared chicken breast with lemon, capers, and herbs.",
+                  "price": "22.50",
+                  "imageUrl": "/uploads/dishes/pollo-limone.jpg",
+                  "isAvailable": true,
+                  "displayOrder": 0,
+                  "media": [
+                    {
+                      "url": "/uploads/dishes/pollo-limone.jpg",
+                      "kind": "image",
+                      "displayOrder": 0
+                    },
+                    {
+                      "url": "https://example.com/videos/pollo-prep.mp4",
+                      "kind": "video",
+                      "displayOrder": 1
+                    }
+                  ],
+                  "ingredients": [
+                    { "slug": "chicken", "isOptional": false, "isHidden": false, "displayOrder": 0 },
+                    { "slug": "lemon", "isOptional": false, "isHidden": false, "displayOrder": 1 },
+                    { "slug": "olive-oil", "isOptional": false, "isHidden": false, "displayOrder": 2 },
+                    { "slug": "garlic", "isOptional": true, "isHidden": false, "displayOrder": 3 },
+                    { "slug": "black-pepper", "isOptional": false, "isHidden": false, "displayOrder": 4 },
+                    { "slug": "salt", "isOptional": false, "isHidden": true, "displayOrder": 5 }
+                  ],
+                  "translations": []
+                },
+                {
+                  "name": "Bistecca alla Griglia",
+                  "description": "Grilled ribeye with rosemary potatoes.",
+                  "price": "32.00",
+                  "imageUrl": null,
+                  "isAvailable": true,
+                  "displayOrder": 1,
+                  "media": [],
+                  "ingredients": [
+                    { "slug": "beef", "isOptional": false, "isHidden": false, "displayOrder": 0 },
+                    { "slug": "potato", "isOptional": false, "isHidden": false, "displayOrder": 1 },
+                    { "slug": "olive-oil", "isOptional": false, "isHidden": false, "displayOrder": 2 },
+                    { "slug": "salt", "isOptional": false, "isHidden": true, "displayOrder": 3 },
+                    { "slug": "black-pepper", "isOptional": false, "isHidden": false, "displayOrder": 4 }
+                  ],
+                  "translations": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Lunch",
+          "isPublished": false,
+          "displayOrder": 1,
+          "sections": []
+        }
+      ]
+    }
+  ]
+}

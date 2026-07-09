@@ -6,6 +6,8 @@ alwaysApply: false
 
 # Drizzle migrations
 
+Full version with a worked cautionary example lives in `.claude/skills/db-migration/SKILL.md` - this file is the Cursor-native equivalent, kept in sync with it.
+
 ## Never do this
 
 - Do **not** hand-write `packages/db/drizzle/*.sql` migration files.
@@ -43,3 +45,5 @@ pnpm --filter @digital-menu/seed seed   # optional
 ```
 
 See `SETUP.md` § Reset.
+
+If you find a `meta/*_snapshot.json` with no matching `.sql` file or journal entry (an interrupted `generate`), delete the orphaned snapshot and re-run `drizzle:generate` clean rather than hand-writing the missing SQL — see the `db-migration` skill for the worked example this happened once already (the "0009 incident").

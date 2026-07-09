@@ -261,6 +261,9 @@ importers:
       '@digital-menu/db':
         specifier: workspace:*
         version: link:../db
+      bcrypt:
+        specifier: ^6.0.0
+        version: 6.0.0
       drizzle-orm:
         specifier: ^0.38.0
         version: 0.38.4(@types/pg@8.20.0)(@types/react@19.2.14)(pg@8.20.0)(react@19.2.4)

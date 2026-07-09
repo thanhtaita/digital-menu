@@ -54,3 +54,29 @@ export async function geminiChat(request: AiChatRequest): Promise<AiCompletionRe
     provider: "gemini"
   };
 }
+
+export async function* geminiChatStream(request: AiChatRequest): AsyncGenerator<string> {
+  const genAI = getClient();
+  const model = genAI.getGenerativeModel({
+    model: request.model,
+    systemInstruction: request.systemPrompt,
+    generationConfig: {
+      temperature: request.temperature,
+      maxOutputTokens: request.maxOutputTokens,
+      ...(request.jsonMode ? { responseMimeType: "application/json" } : {})
+    }
+  });
+
+  const history = request.history.map((message) => ({
+    role: message.role === "user" ? ("user" as const) : ("model" as const),
+    parts: [{ text: message.content }]
+  }));
+
+  const chat = model.startChat({ history });
+  const streamResult = await chat.sendMessageStream(request.userMessage);
+
+  for await (const chunk of streamResult.stream) {
+    const text = chunk.text();
+    if (text) yield text;
+  }
+}

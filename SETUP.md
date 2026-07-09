@@ -41,7 +41,7 @@ cp .env.example .env
 Default in `.env.example`:
 
 - `DATABASE_URL=postgres://postgres:123456@localhost:5433/digital_menu`
-- `PORT=3001`
+- `PORT=3002` (matches the `cross-env PORT=3002` override baked into `apps/api`'s `dev` script - see `apps/api/package.json`)
 
 ### 3. Database: schema changes and migrate
 
@@ -62,13 +62,30 @@ After migrate, confirm new tables exist. If migrate says success but tables are 
 
 ### 4. Seed test data (optional)
 
-Load 25 ingredients + aliases into `ingredients` and `ingredient_aliases`:
+Load ingredients + aliases into `ingredients` and `ingredient_aliases`, then seed demo restaurants and menus:
 
 ```bash
 pnpm --filter @digital-menu/seed seed
+pnpm --filter @digital-menu/seed seed:menus
 ```
 
-This builds `@digital-menu/db` then runs the seed script. Safe to run multiple times.
+Run **`seed` first** — `seed:menus` links dishes to ingredient slugs and will fail if the dictionary is empty.
+
+Both scripts build `@digital-menu/db` before running. Safe to re-run (idempotent).
+
+**Ingredients** (`seed`): loads the test ingredient dictionary from [`packages/seed/src/seed-test-data.ts`](packages/seed/src/seed-test-data.ts) (allergens, staples, and Polar Palate menu ingredients).
+
+**Menus** (`seed:menus`): loads:
+
+- [`packages/seed/data/menu-seed.json`](packages/seed/data/menu-seed.json) — **Bella Cucina** (`bella-cucina`, owner `chef@bella-cucina.test` / `changeme123`)
+- [`packages/seed/data/ai-test-menu-seed.json`](packages/seed/data/ai-test-menu-seed.json) — **Polar Palate** (`polar-palate`, owner `chef@polar-palate.test` / `changeme123`) — 15 polarizing dishes for AI recommendation QA
+
+After seeding menus, verify:
+
+- `GET http://localhost:3002/api/v1/public/restaurants`
+- `GET http://localhost:3002/api/v1/public/restaurants/bella-cucina/menu`
+- `GET http://localhost:3002/api/v1/public/restaurants/polar-palate/menu`
+- Diner chat: `http://localhost:3003/r/polar-palate/chat` (with diner app running)
 
 ### 5. Run the API
 
@@ -76,7 +93,7 @@ This builds `@digital-menu/db` then runs the seed script. Safe to run multiple t
 pnpm --filter @digital-menu/api dev
 ```
 
-API base: **http://localhost:3001**
+API base: **http://localhost:3002** (the `dev` script hardcodes `PORT=3002` via `cross-env`, overriding the `PORT=3001` fallback in `apps/api/src/index.ts` and whatever `.env` says)
 
 - Health: `GET /api/v1/health`
 - Ingredients: `GET /api/v1/ingredients?q=garlic`
@@ -97,6 +114,7 @@ pnpm --filter @digital-menu/db db:reset
 
 # 2. (Optional) Seed test data again
 pnpm --filter @digital-menu/seed seed
+pnpm --filter @digital-menu/seed seed:menus
 ```
 
 `db:reset` runs `packages/db/scripts/reset-schema.ts` (drops and recreates the `public` schema) then `drizzle:migrate`. All tables and the Drizzle journal are recreated; data is lost.
@@ -126,6 +144,7 @@ Do **not** run `seed` if you don’t want test ingredients.
 | Drizzle Studio (DB GUI) | `pnpm --filter @digital-menu/db drizzle:studio` |
 | **Seed** | |
 | Seed test ingredients | `pnpm --filter @digital-menu/seed seed` |
+| Seed demo restaurant menus | `pnpm --filter @digital-menu/seed seed:menus` (run after `seed`) |
 | **API** | |
 | Run API dev server | `pnpm --filter @digital-menu/api dev` |
 | Build API | `pnpm --filter @digital-menu/api build` |
@@ -138,7 +157,7 @@ Do **not** run `seed` if you don’t want test ingredients.
 ```
 digital-menu/
 ├── apps/
-│   └── api/          # Fastify API (port 3001)
+│   └── api/          # Fastify API (dev server runs on port 3002 - see apps/api/package.json)
 ├── packages/
 │   ├── db/            # Drizzle schema + migrations
 │   ├── shared/        # Zod schemas, enums
@@ -156,4 +175,4 @@ digital-menu/
 - **“password authentication failed”** — Set `DATABASE_URL` in `.env` with the correct user/password/port (e.g. `postgres:123456@localhost:5433`).
 - **“relation … already exists”** — DB is in a partial state. Run `pnpm --filter @digital-menu/db db:reset` then optionally `pnpm --filter @digital-menu/seed seed`.
 - **“Cannot find module '@digital-menu/db/dist/index.js'”** — The seed script now runs `pnpm --filter @digital-menu/db build` before seeding; if you run the seed script manually, run that build first.
-- **Port in use** — Change `PORT` in `.env` (default 3001) or stop the process using the port.
+- **Port in use** — The `dev` script hardcodes `PORT=3002` via `cross-env` (overrides `.env`); change it in `apps/api/package.json`'s `dev` script if you need a different port for local dev, or stop the process using 3002.
