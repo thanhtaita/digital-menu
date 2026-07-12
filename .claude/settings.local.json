@@ -60,7 +60,13 @@
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('scripts',{}\\), indent=2\\)\\)\")",
       "Bash(node -e \"const fs = require\\('fs'\\); const d = JSON.parse\\(fs.readFileSync\\('D:/projects/digital-menu/packages/db/package.json'\\)\\); console.log\\(JSON.stringify\\(d.scripts, null, 2\\)\\);\")",
       "Bash(npx drizzle-kit *)",
-      "Bash(npx tsx *)"
+      "Bash(npx tsx *)",
+      "Bash(python *)",
+      "Bash(pip install *)",
+      "Skill(update-config)",
+      "PowerShell(Get-Command *)",
+      "Bash(jq -e .hooks.Notification[0].hooks[0].command 'C:\\\\Users\\\\taita/.claude/settings.json')",
+      "Bash(jq -e .hooks.Stop[0].hooks[0].command 'C:\\\\Users\\\\taita/.claude/settings.json')"
     ]
   }
 }

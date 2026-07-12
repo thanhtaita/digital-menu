@@ -56,6 +56,18 @@ Source of truth: `packages/db/src/schema/schema.ts`. Grouped by domain:
 - **Social layer**: `user_follows`, `posts`, `post_media`, `post_likes`, `post_comments` (one level of reply threading via self-referencing `parentCommentId`).
 - **AI chat**: `ai_chat_sessions` (one per user × restaurant, rolling `conversationSummary`, `likedDishNames` jsonb), `ai_chat_messages` (role, content, `recommendations` jsonb on assistant turns).
 
+## Reference data: USDA FoodData Central (`fdc` schema)
+
+A full USDA FoodData Central "Foundation Foods" export (2025-12-18, 24 tables, ~600k rows) is loaded into a dedicated **`fdc` Postgres schema** in the same database as the app - separate from the Drizzle-managed `public` schema and **intentionally not tracked by drizzle-kit/migrations**, since it's static third-party reference data, not app-owned evolving schema.
+
+- **Source data + import tooling**: `resources/FoodData_Central_foundation_food_csv_2025-12-18/` (the raw CSVs + the vendor's field-description workbook) and its `import/` subfolder:
+  - `schema.sql` - hand-written DDL for all 24 `fdc.*` tables, with PK/FK constraints where the source data is clean, and a header comment documenting known referential gaps in USDA's own export (e.g. ~94% of `food_nutrient_conversion_factor` rows reference foods outside this Foundation-only download - left as plain indexed columns, not enforced FKs, rather than aborting the load).
+  - `load.py` - Python/psycopg2 script that applies `schema.sql` then bulk-loads each CSV via native Postgres `COPY` (quoting/embedded newlines parsed by Postgres itself, not a hand-rolled parser). Rerun `python load.py --reset` to wipe and reload from scratch. Requires `psycopg2-binary` (`pip install psycopg2-binary`); no Node dependency was added for this.
+  - `smoke_test.sql` / `smoke_test.py` - example queries shaped like real API calls (ingredient search, full nutrient panel for one food, pivoted macros, portion/serving-size conversion, category facets, ingredient-to-`fdc_id` candidate matching, a referential-gap regression check). Run `python smoke_test.py` to execute them all and print results.
+- **Key tables**: `fdc.food` (fdc_id, description, food_category_id, data_type), `fdc.food_nutrient` (fdc_id, nutrient_id, amount - per-100g), `fdc.nutrient` (id, name, unit_name), `fdc.food_category`, `fdc.food_portion` + `fdc.measure_unit` (household serving-size conversions, e.g. "2 tbsp = 33.9g"), `fdc.foundation_food`.
+- **The app schema already has an integration point for this**: `public.ingredients` (`packages/db/src/schema/schema.ts`) already declares unused `fdcId` (integer), `foodCategory` (text), and `nutrients` (jsonb) columns intended for exactly this data - as of the 2025-12-18 import, none of the seeded ingredients have `fdc_id` populated. An ingredient-nutrition API/feature would: (1) backfill `ingredients.fdc_id` via a name-matching/admin-review step against `fdc.food.description` (see smoke_test.sql query 6 for the matching pattern), then (2) at read time either join `fdc.food_nutrient`/`fdc.nutrient` live by that `fdc_id`, or denormalize the needed macros into `ingredients.nutrients` jsonb.
+- Same `DATABASE_URL` as the rest of the app (`postgres://postgres:123456@localhost:5433/digital_menu` in local dev) - it's the same physical database, just a different schema, so any `pg`/Drizzle client already connected to the app DB can query `fdc.*` directly.
+
 ## Features implemented
 
 ### `apps/api`
@@ -99,6 +111,7 @@ Known gaps: semantic (pgvector) recommendations have a working API but **no UI**
 - No rate limiting anywhere yet (search, AI suggestion, AI chat endpoints).
 - `pg_trgm` extension usage for ingredient fuzzy search should be reconfirmed if search behavior seems off (skipped silently if the extension is unavailable).
 - No Docker Compose or other deployment config exists yet; local dev only.
+- `public.ingredients.fdcId`/`nutrients` columns exist in the schema but are unpopulated - no backfill job exists yet to match them against the `fdc` schema (see [Reference data](#reference-data-usda-fooddata-central-fdc-schema) above).
 
 ## Skills index
 
