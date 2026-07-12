@@ -145,7 +145,7 @@ See the `ai-chat-architecture` skill for full design. Routes: `POST /chat` (bloc
 Base URL (dev): `http://localhost:5173`.
 
 - `/login`, `/register`
-- `/app/restaurants`
+- `/app/restaurants` - restaurant cards include a "QR code" button (fetches `GET /restaurants/:id/qr` as a blob, shows the PNG in a modal with a download link)
 - `/app/restaurants/:restaurantId/builder`
 - `/app/meta/ingredients` - superadmin only; others redirected away
 

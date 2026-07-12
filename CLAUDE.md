@@ -78,9 +78,9 @@ Known gaps: no systematic rate limiting anywhere (search, AI suggestion, AI chat
 
 ### `apps/admin-portal`
 
-Auth (login/register/logout); restaurant list + inline name/description edit; menu builder per restaurant (menus/sections/dishes create-rename-delete with cascade-blocking confirmations, publish/unpublish, multi-file media galleries with reorder, ingredient search/tag/detach, "request new ingredient" inline form, AI ingredient suggestion panel with accept-selected flow, per-dish translations CRUD); superadmin ingredient catalog (`/app/meta/ingredients` - pending queue approve/reject, search + edit + delete + translations + media, direct dictionary add).
+Auth (login/register/logout); restaurant list + inline name/description edit + QR code modal (fetches `GET /restaurants/:id/qr` as a blob, shows the PNG with a download link); menu builder per restaurant (menus/sections/dishes create-rename-delete with cascade-blocking confirmations, publish/unpublish, multi-file media galleries with reorder, ingredient search/tag/detach, "request new ingredient" inline form, AI ingredient suggestion panel with accept-selected flow, per-dish translations CRUD); superadmin ingredient catalog (`/app/meta/ingredients` - pending queue approve/reject, search + edit + delete + translations + media, direct dictionary add).
 
-Known gaps: no QR code display, no rich restaurant-profile editor, no self-service role changes.
+Known gaps: no rich restaurant-profile editor, no self-service role changes.
 
 ### `apps/diner-app`
 
