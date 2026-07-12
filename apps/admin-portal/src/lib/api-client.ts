@@ -153,6 +153,7 @@ const ingredientSchema = z.object({
   nutrients: z.unknown().nullable().optional(),
   isCommonAllergen: z.boolean(),
   commonAllergenGroup: z.string().nullable().optional(),
+  dietTags: z.record(z.boolean()).nullable().optional(),
   approvalStatus: z.enum(["pending", "approved"]),
   requestedByRestaurantId: z.number().nullable().optional(),
   media: z.array(ingredientMediaItemSchema).optional()
@@ -454,6 +455,36 @@ export async function apiAcceptFdcCandidate(id: number): Promise<Ingredient> {
 
 export async function apiRejectFdcCandidate(id: number): Promise<void> {
   await request<void>(`/ingredients/fdc-candidates/${id}/reject`, { method: "POST", body: "{}" });
+}
+
+const dietCandidateRowSchema = z.object({
+  id: z.number(),
+  ingredientId: z.number(),
+  ingredientCanonicalName: z.string(),
+  dietType: z.string(),
+  compatible: z.boolean(),
+  confidence: z.enum(["high", "medium", "low"]),
+  reasoning: z.string().nullable(),
+  status: z.literal("pending"),
+  createdAt: z.string()
+});
+export type DietCandidateRow = z.infer<typeof dietCandidateRowSchema>;
+
+export async function apiListDietCandidates(): Promise<DietCandidateRow[]> {
+  const data = await request<unknown[]>("/ingredients/diet-candidates", { method: "GET" });
+  return z.array(dietCandidateRowSchema).parse(data);
+}
+
+export async function apiAcceptDietCandidate(id: number): Promise<Ingredient> {
+  const data = await request<unknown>(`/ingredients/diet-candidates/${id}/accept`, {
+    method: "POST",
+    body: "{}"
+  });
+  return ingredientSchema.parse(data);
+}
+
+export async function apiRejectDietCandidate(id: number): Promise<void> {
+  await request<void>(`/ingredients/diet-candidates/${id}/reject`, { method: "POST", body: "{}" });
 }
 
 export async function apiDeleteIngredient(id: number): Promise<void> {

@@ -78,6 +78,13 @@
       "when": 1783820958988,
       "tag": "0010_gigantic_hiroim",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1783895213065,
+      "tag": "0011_empty_boomer",
+      "breakpoints": true
     }
   ]
 }

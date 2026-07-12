@@ -65,6 +65,45 @@ never queried live at request time - values are denormalized into `ingredients.n
   rendering nothing (not an error) when `nutrients` is null/empty. The backfill only had to make sure that
   slot actually gets populated data.
 
+## Diet-type restriction filtering (implemented)
+
+`ingredients.diet_tags` (jsonb, migration `0011`) is a per-ingredient compatibility map keyed by the 8
+`DietType` values (`packages/shared/src/diet-types.ts`: vegan, vegetarian, pescatarian, halal, kosher,
+gluten_free, dairy_free, nut_free), e.g. `{"vegan": false, "gluten_free": true}`. **A missing key means no
+signal, not compatibility** - untagged diet types must never be treated as a violation. Populated by an
+LLM-assisted backfill (mirrors the FDC nutrition backfill above), consumed by
+`apps/diner-app/src/lib/restriction-engine.ts` for dish-level blocked/warn badges.
+
+- **Tagging service**: `apps/api/src/services/diet-tagging.ts` - `proposeDietTags(canonicalName, description?)`
+  calls the configured LLM provider (`lib/ai/`, same `generateText` used by
+  `ai-ingredient-suggestion.ts`) with one ingredient at a time, asking it to judge compatibility with all 8
+  diet types at once and rate its own confidence (`"high" | "medium" | "low"`) per diet type. The model may
+  omit diet types it has no opinion on (e.g. "broth" without knowing the base) - those stay untagged, not
+  auto-marked incompatible.
+- **Auto-accept vs. review**: only `confidence === "high"` (`AUTO_ACCEPT_CONFIDENCE` in
+  `diet-tagging.ts`) is merged into `ingredients.diet_tags` directly; `"medium"`/`"low"` are queued in
+  `ingredient_diet_candidates` (migration `0011`, unique on `(ingredient_id, diet_type)`) for a superadmin.
+  Unlike the FDC review queue (competing candidates for one `fdc_id` slot), each diet type is independent,
+  so accepting one candidate never auto-rejects others for the same ingredient.
+- **Backfill script**: `pnpm --filter @digital-menu/api backfill:diet-tags`
+  (`apps/api/src/scripts/backfill-diet-tags.ts`). Processes every `ingredients` row with `diet_tags IS
+  NULL` (i.e. never scanned at least once) - idempotent the same way the FDC backfill is: already-scanned
+  ingredients are skipped, duplicate candidate rows are no-ops via the unique index. An ingredient that
+  gets zero high-confidence tags (everything queued or no-opinion) stays `diet_tags: null` and will be
+  rescanned on the next run - a deliberate difference from FDC's "one match slot", since diet tagging is
+  gradual/per-type rather than all-or-nothing.
+- **Review workflow**: `GET /ingredients/diet-candidates`, `POST /ingredients/diet-candidates/:id/accept`,
+  `POST /ingredients/diet-candidates/:id/reject` (superadmin-only, same shape as the FDC routes; see the
+  `api-routes` skill). Accepting calls `applyDietTag()`, which read-modify-writes `ingredients.diet_tags`
+  (merges the one new key, never overwrites other diet types) and resolves the matching pending candidate.
+  Admin-portal UI: the "Diet tag matches" card in `/app/meta/ingredients`
+  (`apps/admin-portal/src/routes/meta-ingredients.tsx`), directly below the FDC card.
+- **Diner-facing read path**: `apps/api/src/routes/public-menu.ts` selects `ingredients.diet_tags` into
+  the public menu response (`PublicDishIngredient.dietTags`). `restriction-engine.ts`'s `getDishStatus`/
+  `getMatchingRestrictions` check `restrictionType === "diet"` restrictions by scanning a dish's
+  ingredients for any with `dietTags[restriction.dietType] === false`; `undefined` (untagged) is always
+  treated as no signal. Severity (block/warn) works identically to allergy/dislike restrictions.
+
 ## Proposed next iteration: ingredient translation pipeline (not yet built)
 
 This section is design rationale for future work, absorbed from a design plan (`plans/260628_ingredient_translation_pipeline_design_plan.txt`, now merged here and deleted as a standalone file). **None of this exists in `schema.ts` today** - no `translation_jobs`, `ingredient_nutrition`, `is_human_reviewed`, or `ingredient_translation_history` tables. Treat it as aspirational unless a task explicitly asks you to build it.

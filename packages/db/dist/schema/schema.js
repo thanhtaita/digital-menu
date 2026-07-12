@@ -9,6 +9,8 @@ export const ingredientApprovalStatusEnum = pgEnum("ingredient_approval_status",
 export const dishMediaKindEnum = pgEnum("dish_media_kind", ["image", "video"]);
 /** Review state for a candidate USDA FoodData Central match against an ingredient. */
 export const fdcMatchStatusEnum = pgEnum("fdc_match_status", ["pending", "accepted", "rejected"]);
+/** Review state for a candidate diet-compatibility tag against an ingredient. */
+export const dietTagStatusEnum = pgEnum("diet_tag_status", ["pending", "accepted", "rejected"]);
 /**
  * Users and auth
  * - users: Core user accounts. Referenced by sessions, restaurants (owner), user_restrictions, restaurant_admins.
@@ -103,6 +105,7 @@ export const dishMedia = pgTable("dish_media", {
  * - ingredient_aliases: Alternative names per ingredient (i18n).
  * - dish_ingredients: Junction table: which ingredients each dish contains (restaurant-specific usage of global ingredients).
  * - ingredient_fdc_candidates: Review queue for USDA FoodData Central match candidates (see the fdc-nutrition-backfill skill).
+ * - ingredient_diet_candidates: Review queue for LLM-proposed diet-compatibility tags (see the seed-and-ingredient-data skill).
  */
 /** Global ingredient catalog. Canonical names, optional FDC/nutrients, allergen info. Referenced by ingredient_aliases, dish_ingredients, user_restrictions. */
 export const ingredients = pgTable("ingredients", {
@@ -116,6 +119,13 @@ export const ingredients = pgTable("ingredients", {
     nutrients: jsonb("nutrients").$type(),
     isCommonAllergen: boolean("is_common_allergen").notNull().default(false),
     commonAllergenGroup: text("common_allergen_group"),
+    /**
+     * Per-diet compatibility, keyed by the DietType values in @digital-menu/shared (vegan, vegetarian,
+     * pescatarian, halal, kosher, gluten_free, dairy_free, nut_free). true = compatible, false =
+     * incompatible, missing key = no signal yet (never treated as a violation - see restriction-engine).
+     * Populated by the diet-tagging backfill (services/diet-tagging.ts), never hand-edited.
+     */
+    dietTags: jsonb("diet_tags").$type(),
     approvalStatus: ingredientApprovalStatusEnum("approval_status").notNull().default("approved"),
     requestedByRestaurantId: integer("requested_by_restaurant_id").references(() => restaurants.id, {
         onDelete: "set null"
@@ -182,6 +192,27 @@ export const ingredientFdcCandidates = pgTable("ingredient_fdc_candidates", {
 }, (table) => ({
     ingredientFdcUnique: uniqueIndex("ingredient_fdc_candidates_ingredient_id_fdc_id_unique").on(table.ingredientId, table.fdcId),
     statusIdx: index("ingredient_fdc_candidates_status_idx").on(table.status)
+}));
+/**
+ * Candidate diet-compatibility tags proposed by the LLM-assisted backfill (see services/diet-tagging.ts),
+ * pending superadmin review. High-confidence tags are applied directly to ingredients.diet_tags and never
+ * appear here; this table only holds ambiguous (medium/low confidence) proposals awaiting a decision.
+ */
+export const ingredientDietCandidates = pgTable("ingredient_diet_candidates", {
+    id: serial("id").primaryKey(),
+    ingredientId: integer("ingredient_id")
+        .notNull()
+        .references(() => ingredients.id, { onDelete: "cascade" }),
+    dietType: text("diet_type").notNull(),
+    compatible: boolean("compatible").notNull(),
+    confidence: text("confidence").notNull(),
+    reasoning: text("reasoning"),
+    status: dietTagStatusEnum("status").notNull().default("pending"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at")
+}, (table) => ({
+    ingredientDietTypeUnique: uniqueIndex("ingredient_diet_candidates_ingredient_id_diet_type_unique").on(table.ingredientId, table.dietType),
+    statusIdx: index("ingredient_diet_candidates_status_idx").on(table.status)
 }));
 /** User dietary restrictions (allergy, dislike, diet). References users and optionally a specific ingredient; used for filtering/warnings. */
 export const userRestrictions = pgTable("user_restrictions", {

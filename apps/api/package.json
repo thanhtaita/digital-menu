@@ -10,7 +10,8 @@
     "start": "node dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "backfill:fdc": "tsx src/scripts/backfill-fdc-nutrients.ts"
+    "backfill:fdc": "tsx src/scripts/backfill-fdc-nutrients.ts",
+    "backfill:diet-tags": "tsx src/scripts/backfill-diet-tags.ts"
   },
   "dependencies": {
     "@digital-menu/db": "workspace:*",

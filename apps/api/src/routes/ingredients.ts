@@ -12,6 +12,7 @@ import { db } from "../lib/db.js";
 import {
   dishIngredients,
   ingredients,
+  ingredientDietCandidates,
   ingredientFdcCandidates,
   ingredientMedia,
   ingredientTranslations,
@@ -30,6 +31,7 @@ import {
   saveMultipartMedia
 } from "../lib/uploads.js";
 import { applyFdcMatch } from "../services/fdc-matching.js";
+import { applyDietTag } from "../services/diet-tagging.js";
 
 function slugifyCanonicalName(name: string): string {
   const s = name
@@ -200,6 +202,84 @@ export async function ingredientRoutes(app: FastifyInstance) {
       .update(ingredientFdcCandidates)
       .set({ status: "rejected", resolvedAt: new Date() })
       .where(eq(ingredientFdcCandidates.id, id));
+    return reply.status(204).send();
+  });
+
+  // ── Diet-tag review queue ───────────────────────────────────────────────
+
+  /** GET /diet-candidates — pending LLM-proposed diet-compatibility tags awaiting superadmin review. */
+  app.get("/diet-candidates", async (request, reply) => {
+    const auth = await requireAuth(request, reply);
+    if (!auth) return;
+    if (auth.user.role !== "superadmin") {
+      return reply.status(403).send({ error: "Forbidden", code: "FORBIDDEN" });
+    }
+    const rows = await db
+      .select({
+        id: ingredientDietCandidates.id,
+        ingredientId: ingredientDietCandidates.ingredientId,
+        ingredientCanonicalName: ingredients.canonicalName,
+        dietType: ingredientDietCandidates.dietType,
+        compatible: ingredientDietCandidates.compatible,
+        confidence: ingredientDietCandidates.confidence,
+        reasoning: ingredientDietCandidates.reasoning,
+        status: ingredientDietCandidates.status,
+        createdAt: ingredientDietCandidates.createdAt
+      })
+      .from(ingredientDietCandidates)
+      .innerJoin(ingredients, eq(ingredientDietCandidates.ingredientId, ingredients.id))
+      .where(eq(ingredientDietCandidates.status, "pending"))
+      .orderBy(asc(ingredients.canonicalName), asc(ingredientDietCandidates.dietType));
+    return reply.send(rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() })));
+  });
+
+  /** POST /diet-candidates/:id/accept — merge the proposed tag into the ingredient's diet_tags. */
+  app.post<{ Params: { id: string } }>("/diet-candidates/:id/accept", async (request, reply) => {
+    const auth = await requireAuth(request, reply);
+    if (!auth) return;
+    if (auth.user.role !== "superadmin") {
+      return reply.status(403).send({ error: "Forbidden", code: "FORBIDDEN" });
+    }
+    const id = Number(request.params.id);
+    if (Number.isNaN(id)) return reply.status(400).send({ error: "Invalid id" });
+    const [row] = await db
+      .select()
+      .from(ingredientDietCandidates)
+      .where(eq(ingredientDietCandidates.id, id))
+      .limit(1);
+    if (!row || row.status !== "pending") {
+      return reply.status(404).send({ error: "No pending candidate", code: "NOT_PENDING" });
+    }
+    await applyDietTag({
+      ingredientId: row.ingredientId,
+      dietType: row.dietType as Parameters<typeof applyDietTag>[0]["dietType"],
+      compatible: row.compatible
+    });
+    const [updated] = await db.select().from(ingredients).where(eq(ingredients.id, row.ingredientId)).limit(1);
+    return reply.send(await ingredientWithMedia(updated!));
+  });
+
+  /** POST /diet-candidates/:id/reject — dismiss a candidate without touching the ingredient. */
+  app.post<{ Params: { id: string } }>("/diet-candidates/:id/reject", async (request, reply) => {
+    const auth = await requireAuth(request, reply);
+    if (!auth) return;
+    if (auth.user.role !== "superadmin") {
+      return reply.status(403).send({ error: "Forbidden", code: "FORBIDDEN" });
+    }
+    const id = Number(request.params.id);
+    if (Number.isNaN(id)) return reply.status(400).send({ error: "Invalid id" });
+    const [row] = await db
+      .select({ id: ingredientDietCandidates.id, status: ingredientDietCandidates.status })
+      .from(ingredientDietCandidates)
+      .where(eq(ingredientDietCandidates.id, id))
+      .limit(1);
+    if (!row || row.status !== "pending") {
+      return reply.status(404).send({ error: "No pending candidate", code: "NOT_PENDING" });
+    }
+    await db
+      .update(ingredientDietCandidates)
+      .set({ status: "rejected", resolvedAt: new Date() })
+      .where(eq(ingredientDietCandidates.id, id));
     return reply.status(204).send();
   });
 
