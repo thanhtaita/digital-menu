@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiListRestaurants, apiUpdateRestaurant } from "../lib/api-client";
+import { apiGetRestaurantQr, apiListRestaurants, apiUpdateRestaurant } from "../lib/api-client";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Link } from "react-router-dom";
+
+type QrModalState = { restaurantId: number; name: string; url: string };
 
 export function RestaurantsPage() {
   const queryClient = useQueryClient();
@@ -17,6 +19,28 @@ export function RestaurantsPage() {
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editError, setEditError] = useState<string | null>(null);
+  const [qrModal, setQrModal] = useState<QrModalState | null>(null);
+  const [qrError, setQrError] = useState<string | null>(null);
+
+  function closeQrModal() {
+    if (qrModal) URL.revokeObjectURL(qrModal.url);
+    setQrModal(null);
+  }
+
+  const qrM = useMutation({
+    mutationFn: async (r: { id: number; name: string }) => ({
+      restaurantId: r.id,
+      name: r.name,
+      url: await apiGetRestaurantQr(r.id)
+    }),
+    onSuccess: (result: QrModalState) => {
+      setQrError(null);
+      setQrModal(result);
+    },
+    onError: () => {
+      setQrError("Failed to load QR code.");
+    }
+  });
 
   const updateM = useMutation({
     mutationFn: ({ id, name, description }: { id: number; name: string; description: string }) =>
@@ -125,7 +149,21 @@ export function RestaurantsPage() {
                     >
                       Edit
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQrError(null);
+                        qrM.mutate({ id: r.id, name: r.name });
+                      }}
+                      disabled={qrM.isPending && qrM.variables?.id === r.id}
+                      className="text-xs text-slate-500 hover:text-slate-800 hover:underline disabled:opacity-50"
+                    >
+                      {qrM.isPending && qrM.variables?.id === r.id ? "Loading QR…" : "QR code"}
+                    </button>
                   </div>
+                  {qrError && qrM.variables?.id === r.id && (
+                    <p className="mt-1 text-xs text-red-600">{qrError}</p>
+                  )}
                 </>
               )}
             </CardContent>
@@ -135,6 +173,36 @@ export function RestaurantsPage() {
           <p className="text-sm text-muted-foreground">No restaurants yet. Register with a restaurant or create one via API.</p>
         )}
       </div>
+      {qrModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={closeQrModal} />
+          <div className="relative z-10 mx-4 w-full max-w-xs rounded-lg bg-white p-6 shadow-lg">
+            <h2 className="text-base font-semibold text-slate-900">QR code for {qrModal.name}</h2>
+            <p className="mt-1 text-xs text-slate-500">Scan to open this restaurant's menu.</p>
+            <img
+              src={qrModal.url}
+              alt={`QR code linking to ${qrModal.name}'s menu`}
+              className="mx-auto mt-4 h-48 w-48"
+            />
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeQrModal}
+                className="rounded border border-slate-200 px-4 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                Close
+              </button>
+              <a
+                href={qrModal.url}
+                download={`qr-restaurant-${qrModal.restaurantId}.png`}
+                className="rounded bg-slate-900 px-4 py-1.5 text-sm text-white hover:bg-slate-800"
+              >
+                Download PNG
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -553,6 +553,21 @@ export async function apiUpdateRestaurant(
   return restaurantSchema.parse(data);
 }
 
+export async function apiGetRestaurantQr(restaurantId: number): Promise<string> {
+  const res = await fetch(`${API_BASE}/restaurants/${restaurantId}/qr`, {
+    credentials: "include"
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    const data = text ? (JSON.parse(text) as unknown) : null;
+    throw { status: res.status, data };
+  }
+
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
+}
+
 // ── Translation helpers ───────────────────────────────────────────────────
 
 const translationRowSchema = z.object({
