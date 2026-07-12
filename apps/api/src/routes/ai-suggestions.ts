@@ -4,9 +4,10 @@ import { requireAuth } from "../middleware/auth.js";
 import { canUserManageRestaurantWithRole } from "../lib/restaurant-access.js";
 import { isAiNotConfiguredError } from "../lib/ai/index.js";
 import { suggestIngredients } from "../services/ai-ingredient-suggestion.js";
+import { LLM_RATE_LIMIT } from "../lib/rate-limit.js";
 
 export async function aiSuggestionRoutes(app: FastifyInstance) {
-  app.post("/dishes/suggest-ingredients", async (request, reply) => {
+  app.post("/dishes/suggest-ingredients", { config: { rateLimit: LLM_RATE_LIMIT } }, async (request, reply) => {
     const auth = await requireAuth(request, reply);
     if (!auth) return;
 

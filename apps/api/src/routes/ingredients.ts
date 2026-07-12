@@ -23,6 +23,7 @@ import {
   getRestaurantIdsManagedByUser
 } from "../lib/restaurant-access.js";
 import { getSession, getSessionIdFromCookie } from "../lib/auth.js";
+import { SEARCH_RATE_LIMIT } from "../lib/rate-limit.js";
 import {
   localMediaStorage,
   saveMultipartImage,
@@ -204,7 +205,7 @@ export async function ingredientRoutes(app: FastifyInstance) {
 
   app.get<{
     Querystring: { q?: string; limit?: number; offset?: number };
-  }>("/", async (request, reply) => {
+  }>("/", { config: { rateLimit: SEARCH_RATE_LIMIT } }, async (request, reply) => {
     const q = request.query.q?.trim();
     const limit = Number(request.query.limit) || (q ? 30 : 20);
     const offset = Number(request.query.offset) || 0;

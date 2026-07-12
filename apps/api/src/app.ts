@@ -3,7 +3,9 @@ import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
 import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
+import rateLimit from "@fastify/rate-limit";
 import { ensureUploadRoot, getUploadRoot, MAX_MULTIPART_BYTES } from "./lib/uploads.js";
+import { rateLimitKeyGenerator } from "./lib/rate-limit.js";
 import { ensureAiChatLogsRoot } from "./lib/ai-chat-logger.js";
 import { healthRoutes } from "./routes/health.js";
 import { ingredientRoutes } from "./routes/ingredients.js";
@@ -30,6 +32,9 @@ export async function buildApp() {
 
   await app.register(cors, { origin: true, credentials: true });
   await app.register(cookie, { parseOptions: {} });
+  // global: false — only routes that opt in via `config: { rateLimit: {...} }` are throttled
+  // (the LLM-backed AI routes and the ingredient search endpoint; see route files for limits).
+  await app.register(rateLimit, { global: false, keyGenerator: rateLimitKeyGenerator });
 
   await ensureUploadRoot();
   await ensureAiChatLogsRoot();
