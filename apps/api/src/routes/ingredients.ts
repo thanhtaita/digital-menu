@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { SQL } from "drizzle-orm";
-import { and, asc, eq, ilike, inArray, max, or } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, max, or } from "drizzle-orm";
 import {
   createIngredientSchema,
   requestIngredientSchema,
@@ -9,7 +9,14 @@ import {
   upsertTranslationSchema
 } from "@digital-menu/shared";
 import { db } from "../lib/db.js";
-import { dishIngredients, ingredients, ingredientMedia, ingredientTranslations, restaurants } from "@digital-menu/db";
+import {
+  dishIngredients,
+  ingredients,
+  ingredientFdcCandidates,
+  ingredientMedia,
+  ingredientTranslations,
+  restaurants
+} from "@digital-menu/db";
 import { requireAuth } from "../middleware/auth.js";
 import {
   canUserManageRestaurant,
@@ -21,6 +28,7 @@ import {
   saveMultipartImage,
   saveMultipartMedia
 } from "../lib/uploads.js";
+import { applyFdcMatch } from "../services/fdc-matching.js";
 
 function slugifyCanonicalName(name: string): string {
   const s = name
@@ -117,6 +125,81 @@ export async function ingredientRoutes(app: FastifyInstance) {
       .where(eq(ingredients.approvalStatus, "pending"))
       .orderBy(asc(ingredients.id));
     return reply.send(list);
+  });
+
+  // ── FDC nutrition match review queue ────────────────────────────────────
+
+  /** GET /fdc-candidates — pending USDA FoodData Central match candidates awaiting superadmin review. */
+  app.get("/fdc-candidates", async (request, reply) => {
+    const auth = await requireAuth(request, reply);
+    if (!auth) return;
+    if (auth.user.role !== "superadmin") {
+      return reply.status(403).send({ error: "Forbidden", code: "FORBIDDEN" });
+    }
+    const rows = await db
+      .select({
+        id: ingredientFdcCandidates.id,
+        ingredientId: ingredientFdcCandidates.ingredientId,
+        ingredientCanonicalName: ingredients.canonicalName,
+        fdcId: ingredientFdcCandidates.fdcId,
+        fdcDescription: ingredientFdcCandidates.fdcDescription,
+        score: ingredientFdcCandidates.score,
+        status: ingredientFdcCandidates.status,
+        createdAt: ingredientFdcCandidates.createdAt
+      })
+      .from(ingredientFdcCandidates)
+      .innerJoin(ingredients, eq(ingredientFdcCandidates.ingredientId, ingredients.id))
+      .where(eq(ingredientFdcCandidates.status, "pending"))
+      .orderBy(asc(ingredients.canonicalName), desc(ingredientFdcCandidates.score));
+    return reply.send(
+      rows.map((r) => ({ ...r, score: Number(r.score), createdAt: r.createdAt.toISOString() }))
+    );
+  });
+
+  /** POST /fdc-candidates/:id/accept — copy nutrients/food category into the ingredient and set fdc_id. */
+  app.post<{ Params: { id: string } }>("/fdc-candidates/:id/accept", async (request, reply) => {
+    const auth = await requireAuth(request, reply);
+    if (!auth) return;
+    if (auth.user.role !== "superadmin") {
+      return reply.status(403).send({ error: "Forbidden", code: "FORBIDDEN" });
+    }
+    const id = Number(request.params.id);
+    if (Number.isNaN(id)) return reply.status(400).send({ error: "Invalid id" });
+    const [row] = await db
+      .select()
+      .from(ingredientFdcCandidates)
+      .where(eq(ingredientFdcCandidates.id, id))
+      .limit(1);
+    if (!row || row.status !== "pending") {
+      return reply.status(404).send({ error: "No pending candidate", code: "NOT_PENDING" });
+    }
+    await applyFdcMatch({ ingredientId: row.ingredientId, fdcId: row.fdcId });
+    const [updated] = await db.select().from(ingredients).where(eq(ingredients.id, row.ingredientId)).limit(1);
+    return reply.send(await ingredientWithMedia(updated!));
+  });
+
+  /** POST /fdc-candidates/:id/reject — dismiss a candidate without touching the ingredient. */
+  app.post<{ Params: { id: string } }>("/fdc-candidates/:id/reject", async (request, reply) => {
+    const auth = await requireAuth(request, reply);
+    if (!auth) return;
+    if (auth.user.role !== "superadmin") {
+      return reply.status(403).send({ error: "Forbidden", code: "FORBIDDEN" });
+    }
+    const id = Number(request.params.id);
+    if (Number.isNaN(id)) return reply.status(400).send({ error: "Invalid id" });
+    const [row] = await db
+      .select({ id: ingredientFdcCandidates.id, status: ingredientFdcCandidates.status })
+      .from(ingredientFdcCandidates)
+      .where(eq(ingredientFdcCandidates.id, id))
+      .limit(1);
+    if (!row || row.status !== "pending") {
+      return reply.status(404).send({ error: "No pending candidate", code: "NOT_PENDING" });
+    }
+    await db
+      .update(ingredientFdcCandidates)
+      .set({ status: "rejected", resolvedAt: new Date() })
+      .where(eq(ingredientFdcCandidates.id, id));
+    return reply.status(204).send();
   });
 
   app.get<{

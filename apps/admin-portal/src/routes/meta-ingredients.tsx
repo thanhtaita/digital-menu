@@ -2,13 +2,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { ConfirmDialog } from "../components/confirm-dialog";
 import {
+  apiAcceptFdcCandidate,
   apiApproveIngredient,
   apiCreateIngredient,
   apiDeleteIngredient,
   apiListIngredientTranslations,
   apiUpsertIngredientTranslation,
   apiDeleteIngredientTranslation,
+  apiListFdcCandidates,
   apiListPendingIngredients,
+  apiRejectFdcCandidate,
   apiRejectIngredient,
   apiUpdateIngredient,
   apiUploadIngredientMedia,
@@ -133,6 +136,27 @@ export function MetaIngredientsPage() {
   const pendingQ = useQuery({
     queryKey: ["ingredients-pending"],
     queryFn: apiListPendingIngredients
+  });
+
+  const fdcCandidatesQ = useQuery({
+    queryKey: ["ingredients-fdc-candidates"],
+    queryFn: apiListFdcCandidates
+  });
+
+  const acceptFdcCandidateM = useMutation({
+    mutationFn: (id: number) => apiAcceptFdcCandidate(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["ingredients-fdc-candidates"] });
+      await queryClient.invalidateQueries({ queryKey: ["ingredients-search-meta"] });
+      await queryClient.invalidateQueries({ queryKey: ["ingredients-search"] });
+    }
+  });
+
+  const rejectFdcCandidateM = useMutation({
+    mutationFn: (id: number) => apiRejectFdcCandidate(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["ingredients-fdc-candidates"] });
+    }
   });
 
   const searchQ = useQuery({
@@ -401,6 +425,70 @@ export function MetaIngredientsPage() {
                           confirmLabel: "Reject",
                           destructive: true,
                           onConfirm: () => rejectM.mutate(row.id)
+                        })
+                      }
+                    >
+                      Reject
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">FDC nutrition matches</CardTitle>
+          <CardDescription>
+            Candidate USDA FoodData Central matches found by the nutrition backfill job. Accepting copies
+            nutrients into the ingredient; rejecting just dismisses the suggestion.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {fdcCandidatesQ.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+          {fdcCandidatesQ.error && (
+            <p className="text-sm text-red-600">Could not load FDC match candidates. Is the API running?</p>
+          )}
+          {fdcCandidatesQ.data && fdcCandidatesQ.data.length === 0 && (
+            <p className="text-sm text-muted-foreground">No pending FDC matches to review.</p>
+          )}
+          {fdcCandidatesQ.data && fdcCandidatesQ.data.length > 0 && (
+            <ul className="space-y-2">
+              {fdcCandidatesQ.data.map((row) => (
+                <li
+                  key={row.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded border bg-white px-3 py-2 text-sm"
+                >
+                  <div className="min-w-0">
+                    <span className="font-medium">{row.ingredientCanonicalName}</span>
+                    <span className="text-muted-foreground"> → {row.fdcDescription}</span>
+                    <span className="ml-2 text-xs text-slate-400">score {row.score.toFixed(2)}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={acceptFdcCandidateM.isPending || rejectFdcCandidateM.isPending}
+                      onClick={() => acceptFdcCandidateM.mutate(row.id)}
+                    >
+                      Accept
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="text-red-700"
+                      disabled={acceptFdcCandidateM.isPending || rejectFdcCandidateM.isPending}
+                      onClick={() =>
+                        setConfirmDialog({
+                          title: "Reject FDC match",
+                          message: `Dismiss "${row.fdcDescription}" as a match for "${row.ingredientCanonicalName}"?`,
+                          confirmLabel: "Reject",
+                          destructive: true,
+                          onConfirm: () => rejectFdcCandidateM.mutate(row.id)
                         })
                       }
                     >

@@ -427,6 +427,35 @@ export async function apiUpdateIngredient(id: number, input: UpdateIngredientInp
   return ingredientSchema.parse(data);
 }
 
+const fdcCandidateRowSchema = z.object({
+  id: z.number(),
+  ingredientId: z.number(),
+  ingredientCanonicalName: z.string(),
+  fdcId: z.number(),
+  fdcDescription: z.string(),
+  score: z.number(),
+  status: z.literal("pending"),
+  createdAt: z.string()
+});
+export type FdcCandidateRow = z.infer<typeof fdcCandidateRowSchema>;
+
+export async function apiListFdcCandidates(): Promise<FdcCandidateRow[]> {
+  const data = await request<unknown[]>("/ingredients/fdc-candidates", { method: "GET" });
+  return z.array(fdcCandidateRowSchema).parse(data);
+}
+
+export async function apiAcceptFdcCandidate(id: number): Promise<Ingredient> {
+  const data = await request<unknown>(`/ingredients/fdc-candidates/${id}/accept`, {
+    method: "POST",
+    body: "{}"
+  });
+  return ingredientSchema.parse(data);
+}
+
+export async function apiRejectFdcCandidate(id: number): Promise<void> {
+  await request<void>(`/ingredients/fdc-candidates/${id}/reject`, { method: "POST", body: "{}" });
+}
+
 export async function apiDeleteIngredient(id: number): Promise<void> {
   await request<void>(`/ingredients/${id}`, { method: "DELETE" });
 }

@@ -7,6 +7,8 @@ export const restrictionSeverityEnum = pgEnum("restriction_severity", ["block", 
 export const ingredientApprovalStatusEnum = pgEnum("ingredient_approval_status", ["pending", "approved"]);
 /** Gallery item type for dish_media (images and videos). */
 export const dishMediaKindEnum = pgEnum("dish_media_kind", ["image", "video"]);
+/** Review state for a candidate USDA FoodData Central match against an ingredient. */
+export const fdcMatchStatusEnum = pgEnum("fdc_match_status", ["pending", "accepted", "rejected"]);
 /**
  * Users and auth
  * - users: Core user accounts. Referenced by sessions, restaurants (owner), user_restrictions, restaurant_admins.
@@ -100,6 +102,7 @@ export const dishMedia = pgTable("dish_media", {
  * - ingredients: Canonical ingredients (FDC, nutrients, allergen flags). Referenced by ingredient_aliases, dish_ingredients, user_restrictions.
  * - ingredient_aliases: Alternative names per ingredient (i18n).
  * - dish_ingredients: Junction table: which ingredients each dish contains (restaurant-specific usage of global ingredients).
+ * - ingredient_fdc_candidates: Review queue for USDA FoodData Central match candidates (see the fdc-nutrition-backfill skill).
  */
 /** Global ingredient catalog. Canonical names, optional FDC/nutrients, allergen info. Referenced by ingredient_aliases, dish_ingredients, user_restrictions. */
 export const ingredients = pgTable("ingredients", {
@@ -158,6 +161,27 @@ export const dishIngredients = pgTable("dish_ingredients", {
     displayOrder: integer("display_order").notNull().default(0)
 }, (table) => ({
     dishIngredientUnique: uniqueIndex("dish_ingredients_dish_id_ingredient_id_unique").on(table.dishId, table.ingredientId)
+}));
+/**
+ * Candidate matches from the `fdc` reference schema (see resources/FoodData_Central_.../import) against an
+ * ingredient, pending superadmin review. Not a live join target - once accepted, the needed nutrients are
+ * denormalized into ingredients.nutrients and ingredients.fdc_id is set; this table only tracks the review
+ * queue/audit trail, never read at request time.
+ */
+export const ingredientFdcCandidates = pgTable("ingredient_fdc_candidates", {
+    id: serial("id").primaryKey(),
+    ingredientId: integer("ingredient_id")
+        .notNull()
+        .references(() => ingredients.id, { onDelete: "cascade" }),
+    fdcId: integer("fdc_id").notNull(),
+    fdcDescription: text("fdc_description").notNull(),
+    score: numeric("score", { precision: 5, scale: 4 }).notNull(),
+    status: fdcMatchStatusEnum("status").notNull().default("pending"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at")
+}, (table) => ({
+    ingredientFdcUnique: uniqueIndex("ingredient_fdc_candidates_ingredient_id_fdc_id_unique").on(table.ingredientId, table.fdcId),
+    statusIdx: index("ingredient_fdc_candidates_status_idx").on(table.status)
 }));
 /** User dietary restrictions (allergy, dislike, diet). References users and optionally a specific ingredient; used for filtering/warnings. */
 export const userRestrictions = pgTable("user_restrictions", {

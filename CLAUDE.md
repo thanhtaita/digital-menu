@@ -49,7 +49,7 @@ Source of truth: `packages/db/src/schema/schema.ts`. Grouped by domain:
 
 - **Users & auth**: `users` (role enum, bcrypt hash, avatar/bio), `sessions`.
 - **Restaurant/menu hierarchy**: `restaurants` (slug-unique tenant root) → `menus` (`isPublished`) → `menu_sections` → `dishes` (+ `dish_media` galleries).
-- **Ingredient dictionary** (global, not restaurant-scoped): `ingredients` (approval workflow, allergen flags, jsonb `nutrients`), `ingredient_media`, `ingredient_aliases` (lang-tagged), `dish_ingredients` (junction, restrict-on-delete).
+- **Ingredient dictionary** (global, not restaurant-scoped): `ingredients` (approval workflow, allergen flags, jsonb `nutrients` backfilled from `fdc.*`), `ingredient_media`, `ingredient_aliases` (lang-tagged), `dish_ingredients` (junction, restrict-on-delete), `ingredient_fdc_candidates` (FDC match review queue).
 - **Restrictions & admin**: `user_restrictions` (allergy/dislike/diet, block/warn severity), `restaurant_admins` (multi-admin junction).
 - **Translations**: `dish_translations`, `ingredient_translations` - locale-keyed overlays, separate from `ingredient_aliases`.
 - **Embeddings/recommendations** (legacy/parallel to AI chat): `user_preferences`, `dish_embeddings`, `user_preference_embeddings`, `embedding_jobs`, `recommendations`, `recommendation_feedback`.
@@ -65,14 +65,14 @@ A full USDA FoodData Central "Foundation Foods" export (2025-12-18, 24 tables, ~
   - `load.py` - Python/psycopg2 script that applies `schema.sql` then bulk-loads each CSV via native Postgres `COPY` (quoting/embedded newlines parsed by Postgres itself, not a hand-rolled parser). Rerun `python load.py --reset` to wipe and reload from scratch. Requires `psycopg2-binary` (`pip install psycopg2-binary`); no Node dependency was added for this.
   - `smoke_test.sql` / `smoke_test.py` - example queries shaped like real API calls (ingredient search, full nutrient panel for one food, pivoted macros, portion/serving-size conversion, category facets, ingredient-to-`fdc_id` candidate matching, a referential-gap regression check). Run `python smoke_test.py` to execute them all and print results.
 - **Key tables**: `fdc.food` (fdc_id, description, food_category_id, data_type), `fdc.food_nutrient` (fdc_id, nutrient_id, amount - per-100g), `fdc.nutrient` (id, name, unit_name), `fdc.food_category`, `fdc.food_portion` + `fdc.measure_unit` (household serving-size conversions, e.g. "2 tbsp = 33.9g"), `fdc.foundation_food`.
-- **The app schema already has an integration point for this**: `public.ingredients` (`packages/db/src/schema/schema.ts`) already declares unused `fdcId` (integer), `foodCategory` (text), and `nutrients` (jsonb) columns intended for exactly this data - as of the 2025-12-18 import, none of the seeded ingredients have `fdc_id` populated. An ingredient-nutrition API/feature would: (1) backfill `ingredients.fdc_id` via a name-matching/admin-review step against `fdc.food.description` (see smoke_test.sql query 6 for the matching pattern), then (2) at read time either join `fdc.food_nutrient`/`fdc.nutrient` live by that `fdc_id`, or denormalize the needed macros into `ingredients.nutrients` jsonb.
+- **Backfill implemented**: `public.ingredients.fdcId`/`foodCategory`/`nutrients` (`packages/db/src/schema/schema.ts`) are populated by `pnpm --filter @digital-menu/api backfill:fdc`, which fuzzy-matches against `fdc.food.description` (pg_trgm, same approach as the AI ingredient suggestion feature) and denormalizes a fixed macro set (cal/protein/fat/carbs/sodium) into `nutrients` jsonb - no live join to `fdc.*` at request time. Ambiguous matches queue in `ingredient_fdc_candidates` for superadmin review (`/app/meta/ingredients` → "FDC nutrition matches"). See the **`seed-and-ingredient-data`** skill's "FDC nutrition backfill" section for the full design.
 - Same `DATABASE_URL` as the rest of the app (`postgres://postgres:123456@localhost:5433/digital_menu` in local dev) - it's the same physical database, just a different schema, so any `pg`/Drizzle client already connected to the app DB can query `fdc.*` directly.
 
 ## Features implemented
 
 ### `apps/api`
 
-Session auth (register/login/logout/me); restaurant/menu/section/dish CRUD with translations and media galleries (append/reorder/delete, legacy single-image endpoints kept for compatibility); ingredient dictionary search + approval workflow (restaurant request → superadmin approve/reject/edit/delete) + translations + media; public no-auth endpoints (`/public/restaurants`, `/public/restaurants/:slug/menu`, `/public/restaurants/:slug/posts`); user restrictions CRUD; QR PNG generation; AI ingredient suggestion endpoint (pg_trgm fuzzy match against the dictionary, confidence-filtered - see `recommendation-embeddings` skill for future phases); user preferences + pgvector semantic recommendations (DB/API implemented, embedding-generation service not yet built - see `recommendation-embeddings` skill); full social layer (profiles, follows, posts, likes, threaded comments, feed); AI chat (send/stream/history/clear/like) - see the `ai-chat-architecture` skill.
+Session auth (register/login/logout/me); restaurant/menu/section/dish CRUD with translations and media galleries (append/reorder/delete, legacy single-image endpoints kept for compatibility); ingredient dictionary search + approval workflow (restaurant request → superadmin approve/reject/edit/delete) + translations + media; FDC nutrition backfill (`GET/POST /ingredients/fdc-candidates*` review queue + `backfill:fdc` script - see `seed-and-ingredient-data` skill); public no-auth endpoints (`/public/restaurants`, `/public/restaurants/:slug/menu`, `/public/restaurants/:slug/posts`); user restrictions CRUD; QR PNG generation; AI ingredient suggestion endpoint (pg_trgm fuzzy match against the dictionary, confidence-filtered - see `recommendation-embeddings` skill for future phases); user preferences + pgvector semantic recommendations (DB/API implemented, embedding-generation service not yet built - see `recommendation-embeddings` skill); full social layer (profiles, follows, posts, likes, threaded comments, feed); AI chat (send/stream/history/clear/like) - see the `ai-chat-architecture` skill.
 
 Known gaps: no systematic rate limiting anywhere (search, AI suggestion, AI chat).
 
@@ -111,7 +111,7 @@ Known gaps: semantic (pgvector) recommendations have a working API but **no UI**
 - No rate limiting anywhere yet (search, AI suggestion, AI chat endpoints).
 - `pg_trgm` extension usage for ingredient fuzzy search should be reconfirmed if search behavior seems off (skipped silently if the extension is unavailable).
 - No Docker Compose or other deployment config exists yet; local dev only.
-- `public.ingredients.fdcId`/`nutrients` columns exist in the schema but are unpopulated - no backfill job exists yet to match them against the `fdc` schema (see [Reference data](#reference-data-usda-fooddata-central-fdc-schema) above).
+- `public.ingredients.fdcId`/`nutrients` are backfilled by `pnpm --filter @digital-menu/api backfill:fdc` (see [Reference data](#reference-data-usda-fooddata-central-fdc-schema) above and the `seed-and-ingredient-data` skill) - but this only does anything if the `fdc` schema has actually been loaded into your local DB first (`resources/.../import/load.py`); most ingredients will still have `fdc_id: null` until both steps have been run.
 
 ## Skills index
 
@@ -121,7 +121,7 @@ Deep, on-demand reference/procedural knowledge lives in `.claude/skills/*/SKILL.
 |---|---|
 | `db-migration` | Adding/changing any table, column, or index in `packages/db/src/schema/schema.ts` |
 | `ai-chat-architecture` | Working on the AI chat recommendation feature, the `lib/ai/` provider abstraction, streaming, or summarization |
-| `seed-and-ingredient-data` | Running/editing seed scripts, working on the ingredient dictionary, aliases, or translations, or picking up the ingredient translation pipeline plan |
+| `seed-and-ingredient-data` | Running/editing seed scripts, working on the ingredient dictionary, aliases, translations, or the FDC nutrition backfill, or picking up the ingredient translation pipeline plan |
 | `api-routes` | Looking up or adding an HTTP route or frontend page route, or running the manual QA walkthrough |
 | `recommendation-embeddings` | Working on pgvector semantic recommendations, building the missing embedding-generation service, or extending AI ingredient suggestions beyond Phase 1 |
 

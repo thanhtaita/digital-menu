@@ -1,6 +1,6 @@
 ---
 name: seed-and-ingredient-data
-description: Seed script order and fixture format, plus the ingredient dictionary's i18n design (aliases vs translations) and the proposed translation pipeline. Use when running/editing packages/seed scripts, working on ingredients/aliases/translations, or picking up the ingredient translation pipeline.
+description: Seed script order and fixture format, the ingredient dictionary's i18n design (aliases vs translations), the FDC nutrition backfill (matching, review queue, diner-facing rendering), and the proposed translation pipeline. Use when running/editing packages/seed scripts, working on ingredients/aliases/translations/nutrients, or picking up the ingredient translation pipeline.
 ---
 
 # Seed scripts and ingredient data model
@@ -25,6 +25,45 @@ The schema has two genuinely different localization mechanisms that serve differ
 2. **`dish_translations` / `ingredient_translations`** (migration `0005_translations`) - formal, BCP-47 locale-keyed overlay tables (`dishId`/`ingredientId` + `locale` + `name`/`description`, unique per locale) used for **display localization**. The root table (`dishes.name`/`ingredients.canonicalName`) holds the source-language (English) fallback; translations are overlays per locale. This is what the admin portal's "Translations" panels read/write today.
 
 Neither mechanism talks to the other. A translation added via `dish_translations` does not affect alias-based search, and vice versa.
+
+## FDC nutrition backfill (implemented)
+
+`ingredients.nutrients` (jsonb) is populated by matching against the read-only `fdc` Postgres schema
+(USDA FoodData Central "Foundation Foods", loaded per `CLAUDE.md`'s "Reference data" section -
+`resources/FoodData_Central_foundation_food_csv_2025-12-18/import/schema.sql` + `load.py`). `fdc.*` is
+never queried live at request time - values are denormalized into `ingredients.nutrients`/`fdc_id`/
+`food_category` once, at backfill/accept time.
+
+- **Matching service**: `apps/api/src/services/fdc-matching.ts` - `findFdcCandidates(canonicalName)` fuzzy-matches
+  `fdc.food.description` via `pg_trgm` `similarity()` (same approach as
+  `apps/api/src/services/ai-ingredient-suggestion.ts`'s ingredient fuzzy match, reused rather than
+  reinvented). Two thresholds, both env-overridable: `FDC_MATCH_CANDIDATE_THRESHOLD` (default `0.35`,
+  below this a name isn't queued at all) and `FDC_MATCH_AUTO_ACCEPT_THRESHOLD` (default `0.7`, at/above
+  this the backfill script applies the match without review).
+- **Fixed nutrient set**: `FDC_NUTRIENT_IDS` in `packages/shared/src/fdc.ts` - `cal`(1008), `protein`(1003),
+  `fat`(1004), `carbs`(1005), `sodium`(1093). Deliberately a small fixed set, not "whatever fdc has" -
+  extend by adding a key here + a matching pill in `apps/diner-app/src/components/atoms.tsx`'s
+  `NutritionPills`, not by reading arbitrary nutrient_ids ad hoc.
+- **Backfill script**: `pnpm --filter @digital-menu/api backfill:fdc` (`apps/api/src/scripts/backfill-fdc-nutrients.ts`).
+  For every `ingredients` row with `fdc_id IS NULL`: auto-accepts the top candidate above the auto-accept
+  threshold (writes `fdc_id`/`nutrients`/`food_category` directly); queues everything else in
+  `ingredient_fdc_candidates` (migration `0010`) for manual review; leaves ingredients with no candidate
+  above the floor threshold alone (`fdc_id: null`, empty `nutrients` - expected for exotic/restaurant-specific
+  ingredients with no FDC equivalent, not an error). Idempotent: already-matched ingredients are skipped,
+  and the `(ingredient_id, fdc_id)` unique index makes re-queueing a no-op.
+- **Review workflow**: modeled on the existing ingredient-approval pattern (`/ingredients/pending` +
+  `/ingredients/:id/approve` in `apps/api/src/routes/ingredients.ts`). `GET /ingredients/fdc-candidates`,
+  `POST /ingredients/fdc-candidates/:id/accept`, `POST /ingredients/fdc-candidates/:id/reject` (all
+  superadmin-only; see the `api-routes` skill). Accepting calls the same `applyFdcMatch()` the backfill
+  script uses, and also auto-rejects any other pending candidates queued for that ingredient (only one
+  fdc_id can be accepted per ingredient). Admin-portal UI: the "FDC nutrition matches" card in
+  `/app/meta/ingredients` (`apps/admin-portal/src/routes/meta-ingredients.tsx`), styled after the existing
+  pending-ingredient-requests card.
+- **Diner-facing read path**: already wired before this work - `apps/api/src/routes/public-menu.ts` selects
+  `ingredients.nutrients` into the public menu response, and `apps/diner-app`'s ingredient bottom-sheet modal
+  (`apps/diner-app/src/app/r/[slug]/menu-with-modal.tsx`) renders it via `NutritionPills`, which degrades to
+  rendering nothing (not an error) when `nutrients` is null/empty. The backfill only had to make sure that
+  slot actually gets populated data.
 
 ## Proposed next iteration: ingredient translation pipeline (not yet built)
 

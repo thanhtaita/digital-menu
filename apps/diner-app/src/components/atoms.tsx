@@ -131,6 +131,7 @@ export function NutritionPills({
     { k: "fat", v: nutrients.fat, u: "g fat" },
     { k: "protein", v: nutrients.protein, u: "g protein" },
     { k: "carbs", v: nutrients.carbs, u: "g carbs" },
+    { k: "sodium", v: nutrients.sodium, u: "mg sodium" },
   ].filter((it) => it.v !== undefined && it.v !== null);
 
   if (items.length === 0) return null;

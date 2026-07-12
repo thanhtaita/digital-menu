@@ -11,4 +11,5 @@ export * from "./ai-suggestions";
 export * from "./recommendations";
 export * from "./social";
 export * from "./ai-chat";
+export * from "./fdc";
 

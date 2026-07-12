@@ -41,6 +41,9 @@ Base URL: `http://localhost:3002/api/v1` (the `dev` script hardcodes `PORT=3002`
 - `GET /ingredients/:id/translations` - superadmin only.
 - `PUT /ingredients/:id/translations/:locale` - create/replace (superadmin only). Body `{name, description?}`.
 - `DELETE /ingredients/:id/translations/:locale` - superadmin only.
+- `GET /ingredients/fdc-candidates` - superadmin only; pending USDA FoodData Central match review queue (see the "FDC nutrition backfill" section in the `seed-and-ingredient-data` skill). Each row: `{id, ingredientId, ingredientCanonicalName, fdcId, fdcDescription, score, status: "pending", createdAt}`.
+- `POST /ingredients/fdc-candidates/:id/accept` - superadmin only; copies nutrients/food category from `fdc.*` into the ingredient, sets `ingredients.fdc_id`, returns the updated ingredient. `404` if not pending.
+- `POST /ingredients/fdc-candidates/:id/reject` - superadmin only; dismisses the candidate (`204`). `404` if not pending.
 
 ### Restaurants (`/restaurants`)
 

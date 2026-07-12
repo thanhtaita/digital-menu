@@ -71,6 +71,13 @@
       "when": 1783285313581,
       "tag": "0009_wide_wind_dancer",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1783820958988,
+      "tag": "0010_gigantic_hiroim",
+      "breakpoints": true
     }
   ]
 }
