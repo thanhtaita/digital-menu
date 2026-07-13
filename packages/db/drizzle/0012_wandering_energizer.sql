@@ -1,0 +1,1 @@
+ALTER TABLE "ingredient_fdc_candidates" ADD COLUMN "fdc_data_type" text;

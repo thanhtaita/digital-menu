@@ -223,7 +223,7 @@ export const dishIngredients = pgTable(
 );
 
 /**
- * Candidate matches from the `fdc` reference schema (see resources/FoodData_Central_.../import) against an
+ * Candidate matches from the `fdc` reference schema (see resources/fdc-data/import) against an
  * ingredient, pending superadmin review. Not a live join target - once accepted, the needed nutrients are
  * denormalized into ingredients.nutrients and ingredients.fdc_id is set; this table only tracks the review
  * queue/audit trail, never read at request time.
@@ -237,6 +237,9 @@ export const ingredientFdcCandidates = pgTable(
       .references(() => ingredients.id, { onDelete: "cascade" }),
     fdcId: integer("fdc_id").notNull(),
     fdcDescription: text("fdc_description").notNull(),
+    // fdc.food.data_type at match time (e.g. "foundation_food", "sr_legacy_food", "survey_fndds_food") -
+    // lets a reviewer tell sources apart. Nullable: candidates queued before this column existed have none.
+    fdcDataType: text("fdc_data_type"),
     score: numeric("score", { precision: 5, scale: 4 }).notNull(),
     status: fdcMatchStatusEnum("status").notNull().default("pending"),
     createdAt: timestamp("created_at").notNull().defaultNow(),

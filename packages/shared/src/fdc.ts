@@ -33,9 +33,45 @@ export const fdcCandidateSchema = z.object({
   ingredientCanonicalName: z.string(),
   fdcId: z.number(),
   fdcDescription: z.string(),
+  // fdc.food.data_type at match time (e.g. "foundation_food", "sr_legacy_food",
+  // "survey_fndds_food") - null for candidates queued before this field existed.
+  fdcDataType: z.string().nullable(),
   score: z.number(),
   status: z.enum(["pending", "accepted", "rejected"]),
   createdAt: z.string()
 });
 
 export type FdcCandidate = z.infer<typeof fdcCandidateSchema>;
+
+/** One row of fdc.food_nutrient joined to fdc.nutrient - the full panel, not just FDC_NUTRIENT_IDS. */
+export const fdcNutrientDetailSchema = z.object({
+  name: z.string(),
+  unitName: z.string(),
+  amount: z.number(),
+  rank: z.number().nullable()
+});
+
+export type FdcNutrientDetail = z.infer<typeof fdcNutrientDetailSchema>;
+
+/** One row of fdc.food_portion joined to fdc.measure_unit - household/serving-size conversions. */
+export const fdcPortionDetailSchema = z.object({
+  amount: z.number().nullable(),
+  unit: z.string().nullable(),
+  portionDescription: z.string().nullable(),
+  modifier: z.string().nullable(),
+  gramWeight: z.number().nullable()
+});
+
+export type FdcPortionDetail = z.infer<typeof fdcPortionDetailSchema>;
+
+/** Full fdc.* record for one fdc_id - used by the candidate-review detail view, not the backfill path. */
+export const fdcFullDetailSchema = z.object({
+  fdcId: z.number(),
+  description: z.string(),
+  dataType: z.string(),
+  foodCategory: z.string().nullable(),
+  nutrients: z.array(fdcNutrientDetailSchema),
+  portions: z.array(fdcPortionDetailSchema)
+});
+
+export type FdcFullDetail = z.infer<typeof fdcFullDetailSchema>;

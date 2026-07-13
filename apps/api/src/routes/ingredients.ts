@@ -12,6 +12,7 @@ import { db } from "../lib/db.js";
 import {
   dishIngredients,
   ingredients,
+  ingredientAliases,
   ingredientFdcCandidates,
   ingredientMedia,
   ingredientTranslations,
@@ -28,7 +29,7 @@ import {
   saveMultipartImage,
   saveMultipartMedia
 } from "../lib/uploads.js";
-import { applyFdcMatch } from "../services/fdc-matching.js";
+import { applyFdcMatch, fetchFdcFullDetail } from "../services/fdc-matching.js";
 
 function slugifyCanonicalName(name: string): string {
   const s = name
@@ -143,6 +144,7 @@ export async function ingredientRoutes(app: FastifyInstance) {
         ingredientCanonicalName: ingredients.canonicalName,
         fdcId: ingredientFdcCandidates.fdcId,
         fdcDescription: ingredientFdcCandidates.fdcDescription,
+        fdcDataType: ingredientFdcCandidates.fdcDataType,
         score: ingredientFdcCandidates.score,
         status: ingredientFdcCandidates.status,
         createdAt: ingredientFdcCandidates.createdAt
@@ -154,6 +156,55 @@ export async function ingredientRoutes(app: FastifyInstance) {
     return reply.send(
       rows.map((r) => ({ ...r, score: Number(r.score), createdAt: r.createdAt.toISOString() }))
     );
+  });
+
+  /**
+   * GET /fdc-candidates/:id/detail — everything a superadmin needs to judge one match: the full
+   * ingredient (incl. aliases, media, any nutrients already on it) side by side with the full fdc.*
+   * record (every recorded nutrient, not just the fixed macro set, plus household portions).
+   */
+  app.get<{ Params: { id: string } }>("/fdc-candidates/:id/detail", async (request, reply) => {
+    const auth = await requireAuth(request, reply);
+    if (!auth) return;
+    if (auth.user.role !== "superadmin") {
+      return reply.status(403).send({ error: "Forbidden", code: "FORBIDDEN" });
+    }
+    const id = Number(request.params.id);
+    if (Number.isNaN(id)) return reply.status(400).send({ error: "Invalid id" });
+
+    const [candidate] = await db
+      .select()
+      .from(ingredientFdcCandidates)
+      .where(eq(ingredientFdcCandidates.id, id))
+      .limit(1);
+    if (!candidate) return reply.status(404).send({ error: "Not found", code: "NOT_FOUND" });
+
+    const [ingredient] = await db.select().from(ingredients).where(eq(ingredients.id, candidate.ingredientId)).limit(1);
+    if (!ingredient) return reply.status(404).send({ error: "Ingredient not found", code: "NOT_FOUND" });
+
+    const [aliasRows, mediaMap, fdc] = await Promise.all([
+      db.select().from(ingredientAliases).where(eq(ingredientAliases.ingredientId, ingredient.id)),
+      loadMediaByIngredientIds([ingredient.id]),
+      fetchFdcFullDetail(candidate.fdcId)
+    ]);
+
+    return reply.send({
+      candidate: {
+        id: candidate.id,
+        fdcId: candidate.fdcId,
+        fdcDescription: candidate.fdcDescription,
+        fdcDataType: candidate.fdcDataType,
+        score: Number(candidate.score),
+        status: candidate.status,
+        createdAt: candidate.createdAt.toISOString()
+      },
+      ingredient: {
+        ...ingredient,
+        media: serializeIngredientMediaRows(mediaMap.get(ingredient.id) ?? []),
+        aliases: aliasRows.map((a) => ({ id: a.id, alias: a.alias, languageCode: a.languageCode }))
+      },
+      fdc
+    });
   });
 
   /** POST /fdc-candidates/:id/accept — copy nutrients/food category into the ingredient and set fdc_id. */

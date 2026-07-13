@@ -18,12 +18,13 @@ vi.mock("../lib/db.js", () => ({
 }));
 
 vi.mock("../services/fdc-matching.js", () => ({
-  applyFdcMatch: vi.fn()
+  applyFdcMatch: vi.fn(),
+  fetchFdcFullDetail: vi.fn()
 }));
 
 import { requireAuth } from "../middleware/auth.js";
 import { db } from "../lib/db.js";
-import { applyFdcMatch } from "../services/fdc-matching.js";
+import { applyFdcMatch, fetchFdcFullDetail } from "../services/fdc-matching.js";
 
 const SUPERADMIN = { userId: 1, email: "root@test.com", role: "superadmin" };
 const DINER = { userId: 2, email: "diner@test.com", role: "diner" };
@@ -101,6 +102,7 @@ describe("GET /ingredients/fdc-candidates", () => {
           ingredientCanonicalName: "Sumac",
           fdcId: 174962,
           fdcDescription: "Spices, sumac",
+          fdcDataType: "sr_legacy_food",
           score: "0.4500",
           status: "pending",
           createdAt
@@ -118,11 +120,74 @@ describe("GET /ingredients/fdc-candidates", () => {
         ingredientCanonicalName: "Sumac",
         fdcId: 174962,
         fdcDescription: "Spices, sumac",
+        fdcDataType: "sr_legacy_food",
         score: 0.45,
         status: "pending",
         createdAt: createdAt.toISOString()
       }
     ]);
+  });
+});
+
+describe("GET /ingredients/fdc-candidates/:id/detail", () => {
+  it("returns 404 when the candidate does not exist", async () => {
+    authAs(SUPERADMIN);
+    mockSelectQueue([[]]);
+    const res = await app.inject({ method: "GET", url: "/ingredients/fdc-candidates/999/detail" });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("bundles the candidate, full ingredient (with aliases/media), and full fdc detail", async () => {
+    authAs(SUPERADMIN);
+    mockSelectQueue([
+      [
+        {
+          id: 10,
+          ingredientId: 3,
+          fdcId: 174962,
+          fdcDescription: "Spices, sumac",
+          fdcDataType: "sr_legacy_food",
+          score: "0.4500",
+          status: "pending",
+          createdAt: new Date("2026-01-01T00:00:00.000Z")
+        }
+      ],
+      [{ id: 3, canonicalName: "Sumac", nutrients: null }],
+      [{ id: 1, alias: "Sumak", languageCode: "en" }],
+      [{ id: 5, ingredientId: 3, url: "/uploads/sumac.jpg", kind: "image", displayOrder: 0 }]
+    ]);
+    vi.mocked(fetchFdcFullDetail).mockResolvedValue({
+      fdcId: 174962,
+      description: "Spices, sumac",
+      dataType: "sr_legacy_food",
+      foodCategory: "Spices and Herbs",
+      nutrients: [{ name: "Energy", unitName: "KCAL", amount: 300, rank: 300 }],
+      portions: [{ amount: 1, unit: "tsp", portionDescription: null, modifier: null, gramWeight: 2 }]
+    });
+
+    const res = await app.inject({ method: "GET", url: "/ingredients/fdc-candidates/10/detail" });
+    expect(res.statusCode).toBe(200);
+    expect(fetchFdcFullDetail).toHaveBeenCalledWith(174962);
+    const body = res.json();
+    expect(body.candidate).toEqual({
+      id: 10,
+      fdcId: 174962,
+      fdcDescription: "Spices, sumac",
+      fdcDataType: "sr_legacy_food",
+      score: 0.45,
+      status: "pending",
+      createdAt: "2026-01-01T00:00:00.000Z"
+    });
+    expect(body.ingredient).toEqual(
+      expect.objectContaining({
+        id: 3,
+        canonicalName: "Sumac",
+        aliases: [{ id: 1, alias: "Sumak", languageCode: "en" }],
+        media: [{ id: 5, url: "/uploads/sumac.jpg", kind: "image", displayOrder: 0 }]
+      })
+    );
+    expect(body.fdc.description).toBe("Spices, sumac");
+    expect(body.fdc.nutrients).toHaveLength(1);
   });
 });
 

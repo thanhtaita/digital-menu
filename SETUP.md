@@ -9,7 +9,7 @@ How to set up the monorepo from scratch and how to reset the database and apps w
 - **Node.js** 18+ (22 recommended)
 - **pnpm** 9+ (`npm install -g pnpm`)
 - **PostgreSQL** (listening on port **5433** in these instructions; adjust if yours differs)
-- Database **`digital_menu`** and user **`postgres`** (password **123456** in examples)
+- Database `digital_menu` and user `postgres` (password **123456** in examples)
 
 Create the database if it doesn’t exist:
 
@@ -69,16 +69,16 @@ pnpm --filter @digital-menu/seed seed
 pnpm --filter @digital-menu/seed seed:menus
 ```
 
-Run **`seed` first** — `seed:menus` links dishes to ingredient slugs and will fail if the dictionary is empty.
+Run `seed` **first** — `seed:menus` links dishes to ingredient slugs and will fail if the dictionary is empty.
 
 Both scripts build `@digital-menu/db` before running. Safe to re-run (idempotent).
 
-**Ingredients** (`seed`): loads the test ingredient dictionary from [`packages/seed/src/seed-test-data.ts`](packages/seed/src/seed-test-data.ts) (allergens, staples, and Polar Palate menu ingredients).
+**Ingredients** (`seed`): loads the test ingredient dictionary from `[packages/seed/src/seed-test-data.ts](packages/seed/src/seed-test-data.ts)` (allergens, staples, and Polar Palate menu ingredients).
 
 **Menus** (`seed:menus`): loads:
 
-- [`packages/seed/data/menu-seed.json`](packages/seed/data/menu-seed.json) — **Bella Cucina** (`bella-cucina`, owner `chef@bella-cucina.test` / `changeme123`)
-- [`packages/seed/data/ai-test-menu-seed.json`](packages/seed/data/ai-test-menu-seed.json) — **Polar Palate** (`polar-palate`, owner `chef@polar-palate.test` / `changeme123`) — 15 polarizing dishes for AI recommendation QA
+- `[packages/seed/data/menu-seed.json](packages/seed/data/menu-seed.json)` — **Bella Cucina** (`bella-cucina`, owner `chef@bella-cucina.test` / `changeme123`)
+- `[packages/seed/data/ai-test-menu-seed.json](packages/seed/data/ai-test-menu-seed.json)` — **Polar Palate** (`polar-palate`, owner `chef@polar-palate.test` / `changeme123`) — 15 polarizing dishes for AI recommendation QA
 
 After seeding menus, verify:
 
@@ -87,16 +87,64 @@ After seeding menus, verify:
 - `GET http://localhost:3002/api/v1/public/restaurants/polar-palate/menu`
 - Diner chat: `http://localhost:3003/r/polar-palate/chat` (with diner app running)
 
-### 5. Run the API
+### 5. FDC nutrition reference data (optional)
+
+Populates `ingredients.nutrients`/`fdc_id`/`food_category` with real USDA nutrition data. Skippable -
+without it, ingredients just have no nutrition panel (`nutrients` stays empty, not an error).
+
+1. Download the **full** USDA FoodData Central CSV export (not just "Foundation Foods") from
+   [fdc.nal.usda.gov/download-datasets](https://fdc.nal.usda.gov/download-datasets) and extract it into
+   `resources/fdc-data/` (e.g. `resources/fdc-data/food.csv`, `resources/fdc-data/branded_food.csv`, ...).
+   This directory is gitignored (except `resources/fdc-data/import/`) since it's a multi-GB third-party
+   download, not app-owned content - every clone needs to fetch it separately.
+2. Install the loader's one Python dependency: `pip install psycopg2-binary`.
+3. Load it into a dedicated `fdc` Postgres schema (separate from the Drizzle-managed `public` schema,
+   not tracked by migrations - see `CLAUDE.md`'s "Reference data" section for why):
+   ```bash
+   python resources/fdc-data/import/load.py --reset
+   ```
+   Branded Foods (~2M of the ~2.1M downloaded rows) are deliberately excluded at load time - see
+   `resources/fdc-data/import/schema.sql`'s header comment. Takes a few minutes; `food_nutrient.csv`
+   alone is ~1.8GB before filtering.
+4. Match ingredients against it:
+   ```bash
+   pnpm --filter @digital-menu/api backfill:fdc
+   ```
+   High-confidence matches are applied automatically; everything else queues in the admin portal's
+   "FDC nutrition matches" card (`/app/meta/ingredients`) for manual accept/reject. Safe to re-run.
+
+### 6. Run the API
 
 ```bash
 pnpm --filter @digital-menu/api dev
 ```
 
-API base: **http://localhost:3002** (the `dev` script hardcodes `PORT=3002` via `cross-env`, overriding the `PORT=3001` fallback in `apps/api/src/index.ts` and whatever `.env` says)
+API base: **[http://localhost:3002](http://localhost:3002)** (the `dev` script hardcodes `PORT=3002` via `cross-env`, overriding the `PORT=3001` fallback in `apps/api/src/index.ts` and whatever `.env` says)
 
 - Health: `GET /api/v1/health`
 - Ingredients: `GET /api/v1/ingredients?q=garlic`
+
+### 7. Run the frontends
+
+Both frontends call the API, so keep it running (step 6) alongside whichever frontend(s) you start.
+
+```bash
+pnpm --filter @digital-menu/diner-app dev
+```
+
+Diner app: **[http://localhost:3003](http://localhost:3003)**
+
+```bash
+pnpm --filter @digital-menu/admin-portal dev
+```
+
+Admin portal: **[http://localhost:5173](http://localhost:5173)**
+
+Or start API + both frontends together from the repo root:
+
+```bash
+pnpm dev
+```
 
 ---
 
@@ -133,22 +181,26 @@ Do **not** run `seed` if you don’t want test ingredients.
 
 ## Per-app commands (from root)
 
-| What | Command |
-|------|---------|
-| Install all deps | `pnpm install` |
-| Build everything | `pnpm build` |
-| **Database** | |
-| Run migrations | `pnpm --filter @digital-menu/db drizzle:migrate` |
-| Reset schema + migrate | `pnpm --filter @digital-menu/db db:reset` |
-| Generate new migration | `pnpm --filter @digital-menu/db drizzle:generate` |
-| Drizzle Studio (DB GUI) | `pnpm --filter @digital-menu/db drizzle:studio` |
-| **Seed** | |
-| Seed test ingredients | `pnpm --filter @digital-menu/seed seed` |
+| What                       | Command                                                          |
+| -------------------------- | ---------------------------------------------------------------- |
+| Install all deps           | `pnpm install`                                                   |
+| Build everything           | `pnpm build`                                                     |
+| **Database**               |                                                                  |
+| Run migrations             | `pnpm --filter @digital-menu/db drizzle:migrate`                 |
+| Reset schema + migrate     | `pnpm --filter @digital-menu/db db:reset`                        |
+| Generate new migration     | `pnpm --filter @digital-menu/db drizzle:generate`                |
+| Drizzle Studio (DB GUI)    | `pnpm --filter @digital-menu/db drizzle:studio`                  |
+| **Seed**                   |                                                                  |
+| Seed test ingredients      | `pnpm --filter @digital-menu/seed seed`                          |
 | Seed demo restaurant menus | `pnpm --filter @digital-menu/seed seed:menus` (run after `seed`) |
-| **API** | |
-| Run API dev server | `pnpm --filter @digital-menu/api dev` |
-| Build API | `pnpm --filter @digital-menu/api build` |
-| Start API (production) | `pnpm --filter @digital-menu/api start` |
+| **API**                    |                                                                  |
+| Run API dev server         | `pnpm --filter @digital-menu/api dev`                            |
+| Build API                  | `pnpm --filter @digital-menu/api build`                          |
+| Start API (production)     | `pnpm --filter @digital-menu/api start`                          |
+| **Frontends**              |                                                                  |
+| Run diner app (port 3003)  | `pnpm --filter @digital-menu/diner-app dev`                      |
+| Run admin portal (port 5173) | `pnpm --filter @digital-menu/admin-portal dev`                 |
+| Run API + both frontends   | `pnpm dev` (from repo root, via Turborepo)                       |
 
 ---
 

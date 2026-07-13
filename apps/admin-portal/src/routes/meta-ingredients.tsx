@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { ConfirmDialog } from "../components/confirm-dialog";
+import { FdcCandidateDetailDialog } from "../components/fdc-candidate-detail-dialog";
 import {
   apiAcceptFdcCandidate,
   apiApproveIngredient,
@@ -26,17 +27,7 @@ import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { GALLERY_MEDIA_ACCEPT, GALLERY_MULTI_FILE_HINT } from "@/lib/upload-ui";
-
-const ADMIN_API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3002/api/v1";
-
-function resolveUploadAssetUrl(url: string): string {
-  if (url.startsWith("http://") || url.startsWith("https://")) return url;
-  try {
-    return `${new URL(ADMIN_API_BASE).origin}${url}`;
-  } catch {
-    return url;
-  }
-}
+import { fdcDataTypeLabel, resolveUploadAssetUrl } from "../lib/fdc-labels";
 
 export function MetaIngredientsPage() {
   const queryClient = useQueryClient();
@@ -56,6 +47,7 @@ export function MetaIngredientsPage() {
     destructive?: boolean;
     onConfirm: () => void;
   } | null>(null);
+  const [detailCandidateId, setDetailCandidateId] = useState<number | null>(null);
 
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
@@ -146,6 +138,7 @@ export function MetaIngredientsPage() {
   const acceptFdcCandidateM = useMutation({
     mutationFn: (id: number) => apiAcceptFdcCandidate(id),
     onSuccess: async () => {
+      setDetailCandidateId(null);
       await queryClient.invalidateQueries({ queryKey: ["ingredients-fdc-candidates"] });
       await queryClient.invalidateQueries({ queryKey: ["ingredients-search-meta"] });
       await queryClient.invalidateQueries({ queryKey: ["ingredients-search"] });
@@ -155,6 +148,7 @@ export function MetaIngredientsPage() {
   const rejectFdcCandidateM = useMutation({
     mutationFn: (id: number) => apiRejectFdcCandidate(id),
     onSuccess: async () => {
+      setDetailCandidateId(null);
       await queryClient.invalidateQueries({ queryKey: ["ingredients-fdc-candidates"] });
     }
   });
@@ -459,14 +453,20 @@ export function MetaIngredientsPage() {
               {fdcCandidatesQ.data.map((row) => (
                 <li
                   key={row.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded border bg-white px-3 py-2 text-sm"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded border bg-white px-3 py-2 text-sm cursor-pointer hover:bg-slate-50"
+                  onClick={() => setDetailCandidateId(row.id)}
                 >
                   <div className="min-w-0">
                     <span className="font-medium">{row.ingredientCanonicalName}</span>
                     <span className="text-muted-foreground"> → {row.fdcDescription}</span>
+                    {row.fdcDataType && (
+                      <span className="ml-2 rounded bg-slate-200 px-2 py-0.5 text-xs text-slate-600">
+                        {fdcDataTypeLabel(row.fdcDataType)}
+                      </span>
+                    )}
                     <span className="ml-2 text-xs text-slate-400">score {row.score.toFixed(2)}</span>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                     <Button
                       type="button"
                       size="sm"
@@ -501,6 +501,14 @@ export function MetaIngredientsPage() {
           )}
         </CardContent>
       </Card>
+
+      <FdcCandidateDetailDialog
+        candidateId={detailCandidateId}
+        onClose={() => setDetailCandidateId(null)}
+        onAccept={(id) => acceptFdcCandidateM.mutate(id)}
+        onReject={(id) => rejectFdcCandidateM.mutate(id)}
+        isMutating={acceptFdcCandidateM.isPending || rejectFdcCandidateM.isPending}
+      />
 
       <Card>
         <CardHeader>

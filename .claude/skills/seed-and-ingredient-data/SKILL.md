@@ -29,15 +29,18 @@ Neither mechanism talks to the other. A translation added via `dish_translations
 ## FDC nutrition backfill (implemented)
 
 `ingredients.nutrients` (jsonb) is populated by matching against the read-only `fdc` Postgres schema
-(USDA FoodData Central "Foundation Foods", loaded per `CLAUDE.md`'s "Reference data" section -
-`resources/FoodData_Central_foundation_food_csv_2025-12-18/import/schema.sql` + `load.py`). `fdc.*` is
-never queried live at request time - values are denormalized into `ingredients.nutrients`/`fdc_id`/
-`food_category` once, at backfill/accept time.
+(USDA FoodData Central, multi-source - Foundation Foods + SR Legacy + Survey/FNDDS, Branded Foods
+deliberately excluded - loaded per `CLAUDE.md`'s "Reference data" section - `resources/fdc-data/import/schema.sql`
++ `load.py`). `fdc.*` is never queried live at request time - values are denormalized into
+`ingredients.nutrients`/`fdc_id`/`food_category` once, at backfill/accept time.
 
 - **Matching service**: `apps/api/src/services/fdc-matching.ts` - `findFdcCandidates(canonicalName)` fuzzy-matches
   `fdc.food.description` via `pg_trgm` `similarity()` (same approach as
   `apps/api/src/services/ai-ingredient-suggestion.ts`'s ingredient fuzzy match, reused rather than
-  reinvented). Two thresholds, both env-overridable: `FDC_MATCH_CANDIDATE_THRESHOLD` (default `0.35`,
+  reinvented). `fdc.food` spans every loaded source with no `data_type` filter in this query, so a
+  match can come from Foundation, SR Legacy, or Survey/FNDDS - the returned/queued candidate carries
+  `dataType`/`fdcDataType` (from `fdc.food.data_type`) so a reviewer can tell which source it came
+  from. Two thresholds, both env-overridable: `FDC_MATCH_CANDIDATE_THRESHOLD` (default `0.35`,
   below this a name isn't queued at all) and `FDC_MATCH_AUTO_ACCEPT_THRESHOLD` (default `0.7`, at/above
   this the backfill script applies the match without review).
 - **Fixed nutrient set**: `FDC_NUTRIENT_IDS` in `packages/shared/src/fdc.ts` - `cal`(1008), `protein`(1003),
@@ -56,9 +59,20 @@ never queried live at request time - values are denormalized into `ingredients.n
   `POST /ingredients/fdc-candidates/:id/accept`, `POST /ingredients/fdc-candidates/:id/reject` (all
   superadmin-only; see the `api-routes` skill). Accepting calls the same `applyFdcMatch()` the backfill
   script uses, and also auto-rejects any other pending candidates queued for that ingredient (only one
-  fdc_id can be accepted per ingredient). Admin-portal UI: the "FDC nutrition matches" card in
-  `/app/meta/ingredients` (`apps/admin-portal/src/routes/meta-ingredients.tsx`), styled after the existing
-  pending-ingredient-requests card.
+  fdc_id can be accepted per ingredient). `ingredient_fdc_candidates.fdcDataType` (migration `0012`,
+  nullable - candidates queued before this column existed have none) carries the source `data_type` for
+  each candidate. Admin-portal UI: the "FDC nutrition matches" card in `/app/meta/ingredients`
+  (`apps/admin-portal/src/routes/meta-ingredients.tsx`), styled after the existing pending-ingredient-requests
+  card, with a small source badge ("Foundation" / "SR Legacy" / "Survey (FNDDS)") next to each candidate.
+  Clicking a row (not the Accept/Reject buttons themselves) opens `FdcCandidateDetailDialog`
+  (`apps/admin-portal/src/components/fdc-candidate-detail-dialog.tsx`), a two-pane modal fetched via
+  `GET /ingredients/fdc-candidates/:id/detail` - left pane is the full `ingredients` row (description,
+  allergen flags, aliases, media, any nutrients already saved), right pane is the full `fdc.*` record
+  (description, source, food category, household portions, and the **complete** nutrient panel - every
+  `fdc.food_nutrient` row for that `fdc_id`, not just the fixed `FDC_NUTRIENT_IDS` set denormalized onto
+  `ingredients.nutrients`). `fetchFdcFullDetail()` in `fdc-matching.ts` is the query for that full panel;
+  it's only ever called on-demand for one candidate at a time, unlike the per-ingredient backfill path, so
+  the wider join is fine. The dialog's own Accept/Reject buttons reuse the same mutations as the row's.
 - **Diner-facing read path**: already wired before this work - `apps/api/src/routes/public-menu.ts` selects
   `ingredients.nutrients` into the public menu response, and `apps/diner-app`'s ingredient bottom-sheet modal
   (`apps/diner-app/src/app/r/[slug]/menu-with-modal.tsx`) renders it via `NutritionPills`, which degrades to

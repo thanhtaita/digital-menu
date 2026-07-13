@@ -433,6 +433,7 @@ const fdcCandidateRowSchema = z.object({
   ingredientCanonicalName: z.string(),
   fdcId: z.number(),
   fdcDescription: z.string(),
+  fdcDataType: z.string().nullable(),
   score: z.number(),
   status: z.literal("pending"),
   createdAt: z.string()
@@ -442,6 +443,56 @@ export type FdcCandidateRow = z.infer<typeof fdcCandidateRowSchema>;
 export async function apiListFdcCandidates(): Promise<FdcCandidateRow[]> {
   const data = await request<unknown[]>("/ingredients/fdc-candidates", { method: "GET" });
   return z.array(fdcCandidateRowSchema).parse(data);
+}
+
+const ingredientAliasRowSchema = z.object({
+  id: z.number(),
+  alias: z.string(),
+  languageCode: z.string().nullable()
+});
+
+const fdcNutrientDetailSchema = z.object({
+  name: z.string(),
+  unitName: z.string(),
+  amount: z.number(),
+  rank: z.number().nullable()
+});
+
+const fdcPortionDetailSchema = z.object({
+  amount: z.number().nullable(),
+  unit: z.string().nullable(),
+  portionDescription: z.string().nullable(),
+  modifier: z.string().nullable(),
+  gramWeight: z.number().nullable()
+});
+
+const fdcFullDetailSchema = z.object({
+  fdcId: z.number(),
+  description: z.string(),
+  dataType: z.string(),
+  foodCategory: z.string().nullable(),
+  nutrients: z.array(fdcNutrientDetailSchema),
+  portions: z.array(fdcPortionDetailSchema)
+});
+
+const fdcCandidateDetailSchema = z.object({
+  candidate: z.object({
+    id: z.number(),
+    fdcId: z.number(),
+    fdcDescription: z.string(),
+    fdcDataType: z.string().nullable(),
+    score: z.number(),
+    status: z.enum(["pending", "accepted", "rejected"]),
+    createdAt: z.string()
+  }),
+  ingredient: ingredientSchema.extend({ aliases: z.array(ingredientAliasRowSchema) }),
+  fdc: fdcFullDetailSchema.nullable()
+});
+export type FdcCandidateDetail = z.infer<typeof fdcCandidateDetailSchema>;
+
+export async function apiGetFdcCandidateDetail(id: number): Promise<FdcCandidateDetail> {
+  const data = await request<unknown>(`/ingredients/fdc-candidates/${id}/detail`, { method: "GET" });
+  return fdcCandidateDetailSchema.parse(data);
 }
 
 export async function apiAcceptFdcCandidate(id: number): Promise<Ingredient> {

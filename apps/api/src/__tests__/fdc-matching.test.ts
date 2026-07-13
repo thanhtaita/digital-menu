@@ -37,18 +37,18 @@ describe("thresholds", () => {
 });
 
 describe("findFdcCandidates", () => {
-  it("maps db rows to candidates ordered by score", async () => {
+  it("maps db rows to candidates ordered by score, including source data_type", async () => {
     vi.mocked(db.execute).mockResolvedValue({
       rows: [
-        { fdc_id: 747997, description: "Egg, whole, raw", score: 0.82 },
-        { fdc_id: 323294, description: "Egg, white, raw", score: 0.61 }
+        { fdc_id: 747997, description: "Egg, whole, raw", data_type: "foundation_food", score: 0.82 },
+        { fdc_id: 323294, description: "Egg, white, raw", data_type: "sr_legacy_food", score: 0.61 }
       ]
     } as never);
 
     const result = await findFdcCandidates("egg");
     expect(result).toEqual([
-      { fdcId: 747997, description: "Egg, whole, raw", score: 0.82 },
-      { fdcId: 323294, description: "Egg, white, raw", score: 0.61 }
+      { fdcId: 747997, description: "Egg, whole, raw", dataType: "foundation_food", score: 0.82 },
+      { fdcId: 323294, description: "Egg, white, raw", dataType: "sr_legacy_food", score: 0.61 }
     ]);
   });
 
