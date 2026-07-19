@@ -29,7 +29,7 @@ ALTER TABLE "ingredient_translations"
   FOREIGN KEY ("ingredient_id") REFERENCES "public"."ingredients"("id") ON DELETE cascade ON UPDATE no action;
 --> statement-breakpoint
 CREATE UNIQUE INDEX "dish_translations_dish_id_locale_unique"
-  ON "dish_translationns" USING btree ("dish_id", "locale");
+  ON "dish_translations" USING btree ("dish_id", "locale");
 --> statement-breakpoint
 CREATE INDEX "dish_translations_dish_id_idx"
   ON "dish_translations" USING btree ("dish_id");

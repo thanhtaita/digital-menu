@@ -124,7 +124,8 @@ export async function publicMenuRoutes(app: FastifyInstance) {
               imageUrl: ingredients.imageUrl,
               nutrients: ingredients.nutrients,
               isCommonAllergen: ingredients.isCommonAllergen,
-              commonAllergenGroup: ingredients.commonAllergenGroup
+              commonAllergenGroup: ingredients.commonAllergenGroup,
+              dietTags: ingredients.dietTags
             })
             .from(dishIngredients)
             .innerJoin(ingredients, eq(dishIngredients.ingredientId, ingredients.id))
@@ -223,6 +224,7 @@ export async function publicMenuRoutes(app: FastifyInstance) {
                 nutrients: ing.nutrients ?? null,
                 isCommonAllergen: ing.isCommonAllergen,
                 commonAllergenGroup: ing.commonAllergenGroup,
+                dietTags: ing.dietTags ?? null,
                 isOptional: ing.isOptional
               };
             })

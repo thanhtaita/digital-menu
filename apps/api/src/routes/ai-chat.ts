@@ -5,6 +5,7 @@ import { restaurants } from "@digital-menu/db";
 import { sendChatMessageSchema } from "@digital-menu/shared";
 import { requireAuth } from "../middleware/auth.js";
 import { isAiNotConfiguredError } from "../lib/ai/index.js";
+import { LLM_RATE_LIMIT } from "../lib/rate-limit.js";
 import {
   processChat,
   processChatStream,
@@ -23,7 +24,10 @@ async function resolveRestaurant(slug: string): Promise<{ id: number } | null> {
 }
 
 export async function aiChatRoutes(app: FastifyInstance) {
-  app.post<{ Params: { slug: string } }>("/restaurants/:slug/chat", async (request, reply) => {
+  app.post<{ Params: { slug: string } }>(
+    "/restaurants/:slug/chat",
+    { config: { rateLimit: LLM_RATE_LIMIT } },
+    async (request, reply) => {
     const auth = await requireAuth(request, reply);
     if (!auth) return;
 
@@ -51,7 +55,10 @@ export async function aiChatRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post<{ Params: { slug: string } }>("/restaurants/:slug/chat/stream", async (request, reply) => {
+  app.post<{ Params: { slug: string } }>(
+    "/restaurants/:slug/chat/stream",
+    { config: { rateLimit: LLM_RATE_LIMIT } },
+    async (request, reply) => {
     const auth = await requireAuth(request, reply);
     if (!auth) return;
 

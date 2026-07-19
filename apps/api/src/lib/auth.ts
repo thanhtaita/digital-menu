@@ -70,11 +70,13 @@ export const SESSION_COOKIE_NAME = SESSION_COOKIE;
 export const SESSION_AGE_DAYS = 7;
 export function sessionCookieOptions(overrides?: { maxAge?: number }) {
   const maxAge = overrides?.maxAge ?? SESSION_AGE_DAYS * 24 * 60 * 60;
+  const isProduction = process.env.NODE_ENV === "production";
   return {
     path: "/",
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax" as const,
+    secure: isProduction,
+    // Cross-site in production (diner-app and api live on different hosts), same-site in dev.
+    sameSite: isProduction ? ("none" as const) : ("lax" as const),
     maxAge
   };
 }

@@ -1,5 +1,5 @@
 {
-  "id": "a7be0f0a-1b35-435b-b00d-68129a45c63e",
+  "id": "ddeed382-f321-4790-b810-8df13cf4362a",
   "prevId": "166d070e-d598-4ad6-9a22-fb19e3537be2",
   "version": "7",
   "dialect": "postgresql",
@@ -762,6 +762,127 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.ingredient_diet_candidates": {
+      "name": "ingredient_diet_candidates",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "ingredient_id": {
+          "name": "ingredient_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "diet_type": {
+          "name": "diet_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "compatible": {
+          "name": "compatible",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "confidence": {
+          "name": "confidence",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reasoning": {
+          "name": "reasoning",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "diet_tag_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "resolved_at": {
+          "name": "resolved_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "ingredient_diet_candidates_ingredient_id_diet_type_unique": {
+          "name": "ingredient_diet_candidates_ingredient_id_diet_type_unique",
+          "columns": [
+            {
+              "expression": "ingredient_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "diet_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ingredient_diet_candidates_status_idx": {
+          "name": "ingredient_diet_candidates_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ingredient_diet_candidates_ingredient_id_ingredients_id_fk": {
+          "name": "ingredient_diet_candidates_ingredient_id_ingredients_id_fk",
+          "tableFrom": "ingredient_diet_candidates",
+          "tableTo": "ingredients",
+          "columnsFrom": [
+            "ingredient_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.ingredient_fdc_candidates": {
       "name": "ingredient_fdc_candidates",
       "schema": "",
@@ -1114,6 +1235,12 @@
         "common_allergen_group": {
           "name": "common_allergen_group",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "diet_tags": {
+          "name": "diet_tags",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },
@@ -2502,6 +2629,15 @@
     }
   },
   "enums": {
+    "public.diet_tag_status": {
+      "name": "diet_tag_status",
+      "schema": "public",
+      "values": [
+        "pending",
+        "accepted",
+        "rejected"
+      ]
+    },
     "public.dish_media_kind": {
       "name": "dish_media_kind",
       "schema": "public",

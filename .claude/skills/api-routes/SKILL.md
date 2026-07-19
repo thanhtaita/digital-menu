@@ -45,6 +45,9 @@ Base URL: `http://localhost:3002/api/v1` (the `dev` script hardcodes `PORT=3002`
 - `GET /ingredients/fdc-candidates/:id/detail` - superadmin only; everything needed to judge one match side by side, for the admin-portal's click-to-expand detail dialog. Returns `{candidate: {id, fdcId, fdcDescription, fdcDataType, score, status, createdAt}, ingredient: {...full ingredients row, media[], aliases: {id, alias, languageCode}[]}, fdc: {fdcId, description, dataType, foodCategory, nutrients: {name, unitName, amount, rank}[], portions: {amount, unit, portionDescription, modifier, gramWeight}[]} | null}`. `fdc` is the **full** nutrient panel (every `fdc.food_nutrient` row for that `fdc_id`, not just `FDC_NUTRIENT_IDS`) plus household portions from `fdc.food_portion` - see `fetchFdcFullDetail` in `apps/api/src/services/fdc-matching.ts`. `fdc` is `null` if the `fdc_id` no longer resolves (e.g. the reference data was reloaded since the candidate was queued). `404` if the candidate or its ingredient no longer exists.
 - `POST /ingredients/fdc-candidates/:id/accept` - superadmin only; copies nutrients/food category from `fdc.*` into the ingredient, sets `ingredients.fdc_id`, returns the updated ingredient. `404` if not pending.
 - `POST /ingredients/fdc-candidates/:id/reject` - superadmin only; dismisses the candidate (`204`). `404` if not pending.
+- `GET /ingredients/diet-candidates` - superadmin only; pending LLM-proposed diet-compatibility tags (see the "Diet-type restriction filtering" section in the `seed-and-ingredient-data` skill). Each row: `{id, ingredientId, ingredientCanonicalName, dietType, compatible, confidence, reasoning, status: "pending", createdAt}`.
+- `POST /ingredients/diet-candidates/:id/accept` - superadmin only; merges the tag into `ingredients.diet_tags`, returns the updated ingredient. `404` if not pending.
+- `POST /ingredients/diet-candidates/:id/reject` - superadmin only; dismisses the candidate (`204`). `404` if not pending.
 
 ### Restaurants (`/restaurants`)
 
@@ -146,7 +149,7 @@ See the `ai-chat-architecture` skill for full design. Routes: `POST /chat` (bloc
 Base URL (dev): `http://localhost:5173`.
 
 - `/login`, `/register`
-- `/app/restaurants`
+- `/app/restaurants` - restaurant cards include a "QR code" button (fetches `GET /restaurants/:id/qr` as a blob, shows the PNG in a modal with a download link)
 - `/app/restaurants/:restaurantId/builder`
 - `/app/meta/ingredients` - superadmin only; others redirected away
 

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { ConfirmDialog } from "../components/confirm-dialog";
 import { FdcCandidateDetailDialog } from "../components/fdc-candidate-detail-dialog";
 import {
+  apiAcceptDietCandidate,
   apiAcceptFdcCandidate,
   apiApproveIngredient,
   apiCreateIngredient,
@@ -10,8 +11,10 @@ import {
   apiListIngredientTranslations,
   apiUpsertIngredientTranslation,
   apiDeleteIngredientTranslation,
+  apiListDietCandidates,
   apiListFdcCandidates,
   apiListPendingIngredients,
+  apiRejectDietCandidate,
   apiRejectFdcCandidate,
   apiRejectIngredient,
   apiUpdateIngredient,
@@ -150,6 +153,27 @@ export function MetaIngredientsPage() {
     onSuccess: async () => {
       setDetailCandidateId(null);
       await queryClient.invalidateQueries({ queryKey: ["ingredients-fdc-candidates"] });
+    }
+  });
+
+  const dietCandidatesQ = useQuery({
+    queryKey: ["ingredients-diet-candidates"],
+    queryFn: apiListDietCandidates
+  });
+
+  const acceptDietCandidateM = useMutation({
+    mutationFn: (id: number) => apiAcceptDietCandidate(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["ingredients-diet-candidates"] });
+      await queryClient.invalidateQueries({ queryKey: ["ingredients-search-meta"] });
+      await queryClient.invalidateQueries({ queryKey: ["ingredients-search"] });
+    }
+  });
+
+  const rejectDietCandidateM = useMutation({
+    mutationFn: (id: number) => apiRejectDietCandidate(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["ingredients-diet-candidates"] });
     }
   });
 
@@ -509,6 +533,74 @@ export function MetaIngredientsPage() {
         onReject={(id) => rejectFdcCandidateM.mutate(id)}
         isMutating={acceptFdcCandidateM.isPending || rejectFdcCandidateM.isPending}
       />
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Diet tag matches</CardTitle>
+          <CardDescription>
+            Diet-compatibility tags proposed by the LLM-assisted backfill, below the auto-accept confidence
+            threshold. Accepting merges the tag into the ingredient; rejecting just dismisses the suggestion.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {dietCandidatesQ.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+          {dietCandidatesQ.error && (
+            <p className="text-sm text-red-600">Could not load diet tag candidates. Is the API running?</p>
+          )}
+          {dietCandidatesQ.data && dietCandidatesQ.data.length === 0 && (
+            <p className="text-sm text-muted-foreground">No pending diet tags to review.</p>
+          )}
+          {dietCandidatesQ.data && dietCandidatesQ.data.length > 0 && (
+            <ul className="space-y-2">
+              {dietCandidatesQ.data.map((row) => (
+                <li
+                  key={row.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded border bg-white px-3 py-2 text-sm"
+                >
+                  <div className="min-w-0">
+                    <span className="font-medium">{row.ingredientCanonicalName}</span>
+                    <span className="text-muted-foreground"> — {row.dietType.replace(/_/g, " ")}</span>
+                    <span className={row.compatible ? "ml-2 text-emerald-700" : "ml-2 text-red-700"}>
+                      {row.compatible ? "compatible" : "incompatible"}
+                    </span>
+                    <span className="ml-2 text-xs text-slate-400">{row.confidence} confidence</span>
+                    {row.reasoning && <p className="text-xs text-slate-500 mt-0.5">{row.reasoning}</p>}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={acceptDietCandidateM.isPending || rejectDietCandidateM.isPending}
+                      onClick={() => acceptDietCandidateM.mutate(row.id)}
+                    >
+                      Accept
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="text-red-700"
+                      disabled={acceptDietCandidateM.isPending || rejectDietCandidateM.isPending}
+                      onClick={() =>
+                        setConfirmDialog({
+                          title: "Reject diet tag",
+                          message: `Dismiss the "${row.dietType.replace(/_/g, " ")}" tag for "${row.ingredientCanonicalName}"?`,
+                          confirmLabel: "Reject",
+                          destructive: true,
+                          onConfirm: () => rejectDietCandidateM.mutate(row.id)
+                        })
+                      }
+                    >
+                      Reject
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

@@ -22,7 +22,7 @@ Key behaviors:
 - Follow-ups work because prior assistant turns replay their stored `recommendations` into LLM history.
 - Diners can like recommendation cards; liked dish names bias future prompts.
 
-Out of scope: admin-configurable prompts per restaurant, embedding-based ranking inside chat (that's the separate pgvector system - see `CLAUDE.md` § System design), rate limiting (not implemented anywhere yet), production log shipping.
+Out of scope: admin-configurable prompts per restaurant, embedding-based ranking inside chat (that's the separate pgvector system - see `CLAUDE.md` § System design), production log shipping.
 
 ## Architecture
 
@@ -248,7 +248,7 @@ Mocking note: `processChat` issues six ordered `db.select` calls (from the three
 
 ## Known limitations & future work
 
-- No rate limiting on chat endpoints.
+- Rate limiting is per-route (`config: { rateLimit: LLM_RATE_LIMIT }` in `routes/ai-chat.ts`, 20 req/min per session-or-IP via `@fastify/rate-limit` - see `apps/api/src/lib/rate-limit.ts`), not adaptive to actual LLM cost/latency.
 - Menu context sent to the LLM is plain text, so dish-name typos in recommendations are possible.
 - Summarized exchanges disappear from `GET …/history` entirely - only `summary` represents them (no "earlier conversation summarized" UI hint yet).
 - Malformed stream chunks are ignored client-side.

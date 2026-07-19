@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ingredientDietTagsSchema } from "./diet-tagging";
 
 export const publicDishMediaSchema = z.object({
   id: z.number(),
@@ -25,6 +26,7 @@ export const publicDishIngredientSchema = z.object({
   nutrients: z.record(z.unknown()).nullable().optional(),
   isCommonAllergen: z.boolean(),
   commonAllergenGroup: z.string().nullable(),
+  dietTags: ingredientDietTagsSchema.nullable().optional(),
   isOptional: z.boolean()
 });
 

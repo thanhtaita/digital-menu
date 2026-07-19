@@ -69,7 +69,8 @@
       "Bash(jq -e .hooks.Stop[0].hooks[0].command 'C:\\\\Users\\\\taita/.claude/settings.json')",
       "Bash(PGPASSWORD=123456 psql -U postgres -h localhost -p 5433 -d digital_menu -c \"\\\\dn\")",
       "Bash(PGPASSWORD=123456 psql -U postgres -h localhost -p 5433 -d digital_menu -c \"SELECT count\\(*\\) FROM fdc.food;\")",
-      "Bash(FDC_MATCH_CANDIDATE_THRESHOLD=0 DATABASE_URL=\"postgres://postgres:123456@localhost:5433/digital_menu\" pnpm backfill:fdc)"
+      "Bash(FDC_MATCH_CANDIDATE_THRESHOLD=0 DATABASE_URL=\"postgres://postgres:123456@localhost:5433/digital_menu\" pnpm backfill:fdc)",
+      "Bash(git status *)"
     ]
   }
 }
