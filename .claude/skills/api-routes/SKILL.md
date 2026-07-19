@@ -109,6 +109,7 @@ Base URL: `http://localhost:3002/api/v1` (the `dev` script hardcodes `PORT=3002`
 - `GET /public/restaurants` - active restaurants for discovery (`id`, `name`, `slug`, `description`, `logoUrl`).
 - `GET /public/restaurants/:slug/menu` - published menus only, active restaurants only. Nested menus → sections → dishes (with `media`) → ingredients (with `media`; `imageUrl` derived from first gallery image). Approved ingredients globally, or pending when `requested_by_restaurant_id` matches. Shape: `publicMenuResponseSchema` in `@digital-menu/shared`.
 - `GET /public/restaurants/:slug/posts` - posts tagged to this restaurant, no auth; cursor-based (`?before=&limit=`); `likedByMe` always `false`.
+- `GET /public/search?q=` - platform-wide search across dish name/description/ingredient canonical names and restaurant name/description, via `pg_trgm` `similarity()` + `ILIKE` (`apps/api/src/services/search.ts`). Rate-limited (`SEARCH_RATE_LIMIT`, 60/min). Same visibility rules as the two routes above: only active restaurants, only dishes on a published menu of an active restaurant, only approved/non-hidden ingredients. `q` under 2 chars returns empty arrays. Shape: `publicSearchResponseSchema` in `@digital-menu/shared`. See `docs/goals/diner-discovery/features/platform-wide-search/`.
 
 ### Social - profiles
 
@@ -158,7 +159,8 @@ Upload UX: dish/ingredient gallery file inputs use `multiple`; client uploads se
 
 Base URL (dev): `http://localhost:3003`.
 
-- `/` - discovery (active restaurants).
+- `/` - discovery (active restaurants); includes a search box (`SearchBox` component, also in `SiteHeader` on most other pages).
+- `/search?q=` - platform-wide search results, grouped into Restaurants and Dishes; each dish result links to `/r/[slug]#dish-{id}`.
 - `/r/[slug]` - server-rendered public menu; ingredient links open `?i=<slug>` modal; logged-in users see restriction badges.
 - `/r/[slug]?tab=posts` - restaurant community posts tab, with composer for logged-in users.
 - `/r/[slug]/chat` - AI recommendations chat (auth required).
@@ -182,3 +184,4 @@ Base URL (dev): `http://localhost:3003`.
 10. **Social - two users**: use two browser windows/incognito. Register User A (note user ID from the nav link) and User B. User B visits `/u/{A's id}` and clicks **Follow**. User A creates a post via a restaurant's Posts tab. User B checks `/feed` - A's post appears. User B likes the post and leaves a comment. User A replies to B's comment. Check `/u/{A's id}` - post appears in the grid, follower count is 1.
 11. Confirm `/profile` restriction CRUD (add allergy/dislike by ingredient search, add a diet type, remove) and that dish badges (blocked = red, warned = amber) render correctly on `/r/[slug]` for a logged-in diner.
 12. Open `/r/[slug]/chat`, send a message, confirm streaming text appears progressively, recommendation cards render, liking a card persists, and "Clear" resets the conversation.
+13. **Search**: from `/` or any page's header, search a dish name, a partial/typo'd dish name, and an ingredient name not in any dish's name/description - confirm relevant restaurants/dishes appear, grouped, with each dish result linking into its restaurant's menu. Confirm an inactive restaurant or unpublished-menu dish never appears, even for an exact-name query.

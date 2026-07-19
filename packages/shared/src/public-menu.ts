@@ -79,3 +79,27 @@ export type PublicMenuResponse = z.infer<typeof publicMenuResponseSchema>;
 export type PublicDishIngredient = z.infer<typeof publicDishIngredientSchema>;
 export type PublicDishMedia = z.infer<typeof publicDishMediaSchema>;
 export type PublicRestaurantListResponse = z.infer<typeof publicRestaurantListResponseSchema>;
+
+/** One dish result from platform-wide search - trimmed to what a result row needs, with enough restaurant context to link into that restaurant's menu. */
+export const publicSearchDishSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  description: z.string().nullable(),
+  price: z.string(),
+  imageUrl: z.string().nullable(),
+  isAvailable: z.boolean(),
+  restaurant: z.object({
+    id: z.number(),
+    slug: z.string(),
+    name: z.string()
+  })
+});
+
+export const publicSearchResponseSchema = z.object({
+  query: z.string(),
+  restaurants: z.array(publicRestaurantListItemSchema),
+  dishes: z.array(publicSearchDishSchema)
+});
+
+export type PublicSearchDish = z.infer<typeof publicSearchDishSchema>;
+export type PublicSearchResponse = z.infer<typeof publicSearchResponseSchema>;

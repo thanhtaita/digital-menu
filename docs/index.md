@@ -23,6 +23,8 @@ Product-facing and platform work is organized into goals, each with its own feat
   tooling in `apps/admin-portal` for running a restaurant's menu day-to-day.
 - [`goals/platform-hardening/`](./goals/platform-hardening/README.md) - cross-cutting reliability/abuse
   protection that isn't itself a user-facing feature.
+- [`goals/diner-discovery/`](./goals/diner-discovery/README.md) - diner-facing ways to find food across the
+  whole platform, starting with platform-wide search.
 
 Only features backfilled since this docs system was introduced (2026-07-18) have full
 `README.md`/`design.md`/`task-log.md` folders. Capability that predates this system - the ingredient
@@ -53,6 +55,8 @@ Durable architectural decisions with lasting rationale, one file per decision:
   docs system itself, replacing the flat `CLAUDE.md` convention.
 - [`decisions/ADR-002-local-dev-api-port-default.md`](./decisions/ADR-002-local-dev-api-port-default.md) -
   standardizing local-dev API port references on 3002.
+- [`decisions/ADR-003-postgres-search-not-dedicated-engine.md`](./decisions/ADR-003-postgres-search-not-dedicated-engine.md) -
+  platform-wide search stays inside Postgres (`pg_trgm`), no dedicated search engine.
 
 ## Operations
 

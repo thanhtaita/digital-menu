@@ -85,6 +85,13 @@
       "when": 1783895213065,
       "tag": "0011_empty_boomer",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1784428291120,
+      "tag": "0012_nebulous_vampiro",
+      "breakpoints": true
     }
   ]
 }

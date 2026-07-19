@@ -3,6 +3,7 @@ import Link from "next/link";
 import { fetchPublicRestaurants } from "@/lib/public-menu";
 import { MetaLine } from "@/components/atoms";
 import { RestaurantCover } from "@/components/dish-gradient";
+import { SearchBox } from "@/components/search-box";
 
 export default async function Home() {
   const restaurants = await fetchPublicRestaurants();
@@ -73,6 +74,11 @@ export default async function Home() {
                 Read the dish. Know the ingredient. Eat with intention.
               </p>
             </div>
+
+            <div style={{ marginTop: 20 }}>
+              <SearchBox />
+            </div>
+
             {/* Section header */}
             <div
               style={{

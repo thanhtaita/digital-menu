@@ -76,7 +76,12 @@ export const restaurants = pgTable(
     isActive: boolean("is_active").notNull().default(true)
   },
   (table) => ({
-    slugIdx: uniqueIndex("restaurants_slug_unique").on(table.slug)
+    slugIdx: uniqueIndex("restaurants_slug_unique").on(table.slug),
+    nameTrgmIdx: index("restaurants_name_trgm").using("gin", table.name.op("gin_trgm_ops")),
+    descriptionTrgmIdx: index("restaurants_description_trgm").using(
+      "gin",
+      table.description.op("gin_trgm_ops")
+    )
   })
 );
 
@@ -102,18 +107,28 @@ export const menuSections = pgTable("menu_sections", {
 });
 
 /** Dishes (menu items) in a section. Ingredients are linked via dish_ingredients. */
-export const dishes = pgTable("dishes", {
-  id: serial("id").primaryKey(),
-  sectionId: integer("section_id")
-    .notNull()
-    .references(() => menuSections.id, { onDelete: "cascade" }),
-  name: text("name").notNull(),
-  description: text("description"),
-  price: numeric("price", { precision: 10, scale: 2 }).notNull(),
-  imageUrl: text("image_url"),
-  isAvailable: boolean("is_available").notNull().default(true),
-  displayOrder: integer("display_order").notNull().default(0)
-});
+export const dishes = pgTable(
+  "dishes",
+  {
+    id: serial("id").primaryKey(),
+    sectionId: integer("section_id")
+      .notNull()
+      .references(() => menuSections.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description"),
+    price: numeric("price", { precision: 10, scale: 2 }).notNull(),
+    imageUrl: text("image_url"),
+    isAvailable: boolean("is_available").notNull().default(true),
+    displayOrder: integer("display_order").notNull().default(0)
+  },
+  (table) => ({
+    nameTrgmIdx: index("dishes_name_trgm").using("gin", table.name.op("gin_trgm_ops")),
+    descriptionTrgmIdx: index("dishes_description_trgm").using(
+      "gin",
+      table.description.op("gin_trgm_ops")
+    )
+  })
+);
 
 /** Ordered images and videos for a dish (public URLs: /uploads/... or https://). */
 export const dishMedia = pgTable(
