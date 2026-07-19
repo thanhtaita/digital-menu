@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Docs-drift tripwire: blocks commits that touch apps/ or packages/ with no
+# corresponding docs/ update and no explicit opt-out trailer.
+#
+# This is a coarse mechanical check, not a judge of documentation quality -
+# it only answers "did anything under docs/ change alongside this code
+# change". See CLAUDE.md's "which doc to touch" contract for the actual
+# judgment call.
+#
+# Installed as a commit-msg hook (not pre-commit) because it needs to
+# correlate staged files against the in-progress commit message, which only
+# commit-msg receives. Install via scripts/setup-hooks.sh.
+set -euo pipefail
+
+commit_msg_file="$1"
+
+staged_files="$(git diff --cached --name-only)"
+
+# Staged paths under apps/ or packages/ that actually need a docs update:
+# pnpm-lock.yaml and *.md files in those trees don't count.
+code_changes="$(printf '%s\n' "$staged_files" \
+  | grep -E '^(apps|packages)/' \
+  | grep -v '^pnpm-lock\.yaml$' \
+  | grep -vE '\.md$' \
+  || true)"
+
+if [ -z "$code_changes" ]; then
+  exit 0
+fi
+
+if printf '%s\n' "$staged_files" | grep -qE '^docs/'; then
+  exit 0
+fi
+
+if grep -qiE '^docs:[[:space:]]*n/a|^docs-skip:' "$commit_msg_file"; then
+  exit 0
+fi
+
+echo "error: this commit touches apps/ or packages/ but no docs/ file changed" >&2
+echo "either add a docs/ update (see CLAUDE.md's 'which doc to touch' contract)" >&2
+echo "or add a 'Docs: n/a' line to the commit message explaining why not" >&2
+exit 1

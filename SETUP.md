@@ -43,7 +43,17 @@ Default in `.env.example`:
 - `DATABASE_URL=postgres://postgres:123456@localhost:5433/digital_menu`
 - `PORT=3002` (matches the `cross-env PORT=3002` override baked into `apps/api`'s `dev` script - see `apps/api/package.json`)
 
-### 3. Database: schema changes and migrate
+### 3. Git hooks
+
+Run once after cloning to activate the repo's git hooks (currently: a `commit-msg` check that flags
+`apps/`/`packages/` changes with no corresponding `docs/` update - see `CLAUDE.md`'s "which doc to touch"
+contract):
+
+```bash
+bash scripts/setup-hooks.sh
+```
+
+### 4. Database: schema changes and migrate
 
 **Adding tables/columns** (agents and humans): edit `packages/db/src/schema/schema.ts`, then generate — do not hand-write SQL in `packages/db/drizzle/`:
 
@@ -60,7 +70,7 @@ pnpm --filter @digital-menu/db drizzle:migrate
 
 After migrate, confirm new tables exist. If migrate says success but tables are missing, a prior migration may be stuck — see **Reset** below or `CLAUDE.md` §7.
 
-### 4. Seed test data (optional)
+### 5. Seed test data (optional)
 
 Load ingredients + aliases into `ingredients` and `ingredient_aliases`, then seed demo restaurants and menus:
 
@@ -87,7 +97,7 @@ After seeding menus, verify:
 - `GET http://localhost:3002/api/v1/public/restaurants/polar-palate/menu`
 - Diner chat: `http://localhost:3003/r/polar-palate/chat` (with diner app running)
 
-### 5. Run the API
+### 6. Run the API
 
 ```bash
 pnpm --filter @digital-menu/api dev
