@@ -1,6 +1,10 @@
 ### Cursor Global Rules for `digital-menu`
 
-These rules mirror the conventions in root `CLAUDE.md`, the canonical full project knowledge base (project goal, architecture, DB schema, features implemented, known gaps), plus `.claude/skills/*/SKILL.md` for deep dives (DB migrations - also see `.cursor/rules/drizzle-migrations.mdc`, AI chat architecture, seeding/ingredients, route catalog). Read `CLAUDE.md` for the full picture.
+These rules mirror the conventions in root `CLAUDE.md`, a short orientation page pointing at the real
+project knowledge base: **`docs/index.md`** (project goal, goals/features with per-feature READMEs, design
+docs, and task logs, architecture docs, ADRs, operations docs, dated release notes), plus
+`.claude/skills/*/SKILL.md` for deep dives (DB migrations - also see `.cursor/rules/drizzle-migrations.mdc`,
+AI chat architecture, seeding/ingredients, route catalog). Read `docs/index.md` for the full picture.
 
 **If you change a convention here, also update `CLAUDE.md` and `AGENTS.md` in the same change so the three don't drift.**
 
@@ -9,7 +13,7 @@ These rules mirror the conventions in root `CLAUDE.md`, the canonical full proje
 #### 1. Project overview
 
 - **Monorepo layout**
-  - `apps/api`: Fastify 5 API server (port **3002** in local dev - see `CLAUDE.md` § Known gaps).
+  - `apps/api`: Fastify 5 API server (port **3002** in local dev - see `docs/decisions/ADR-002-local-dev-api-port-default.md`).
   - `apps/admin-portal`: Vite + React admin SPA.
   - `apps/diner-app`: Next.js 15 diner-facing app.
   - `packages/db`: Drizzle ORM schema + migrations.
@@ -22,7 +26,7 @@ These rules mirror the conventions in root `CLAUDE.md`, the canonical full proje
   - **Testing**: Vitest (unit/integration) across all three apps.
   - **DB / Migrations**: Drizzle ORM + drizzle-kit. **Never hand-write** `packages/db/drizzle/*.sql` - edit `schema.ts`, run `drizzle:generate`, then `drizzle:migrate`. See `.cursor/rules/drizzle-migrations.mdc` and `.claude/skills/db-migration/SKILL.md`.
 
-When in doubt, follow patterns already used in these folders before inventing new ones. See `CLAUDE.md` § Features implemented for current capability per app.
+When in doubt, follow patterns already used in these folders before inventing new ones. See `docs/index.md` for current capability per app.
 
 ---
 
@@ -40,7 +44,7 @@ When in doubt, follow patterns already used in these folders before inventing ne
 - `packages/shared` holds shared Zod schemas/types reused by backend and frontends.
 - `apps/api` may depend only on `packages/db` and `packages/shared`.
 - Use Zod schemas from `packages/shared` for request/response validation where possible.
-- Keep route handlers thin where practical; push business rules into `lib/`/`services/` helpers as they grow (most CRUD routes today are still handler-only - existing norm, see `CLAUDE.md` § System design).
+- Keep route handlers thin where practical; push business rules into `lib/`/`services/` helpers as they grow (most CRUD routes today are still handler-only - existing norm, see `docs/architecture/system-overview.md`).
 - Admin portal: React + shadcn/ui-style components + Tailwind. Diner app: Next.js 15 App Router, prefer server components for initial data fetch.
 
 ---
@@ -79,7 +83,34 @@ When in doubt, follow patterns already used in these folders before inventing ne
 
 #### 8. Documentation rules
 
-There is no `PROGRESS.md`, `IMPLEMENTED_ROUTES.md`, or per-app `FEATURES.md` anymore. `CLAUDE.md` is the single knowledge base; `.claude/skills/api-routes/SKILL.md` is the route catalog. When you add/remove/change a route or ship a feature, update the relevant section of `CLAUDE.md` (and the route skill for route changes) **in the same change**. Current capability is whatever those files say - unmentioned means not implemented.
+Project knowledge lives in `docs/` (see `docs/index.md`), not in a single flat file - see
+`docs/decisions/ADR-001-structured-docs-system.md` for why. Each fact has exactly one canonical home; a
+generated rollup (`docs/TASKLOGGING.md`, via `pnpm docs:tasklog`) aggregates history without anyone
+hand-maintaining a second copy of it. `CLAUDE.md` is a short orientation pointer, not the knowledge base
+itself.
+
+**Which doc to touch, by kind of change** - the actual enforcement mechanism, read before finishing any
+task that touches code or project knowledge:
+
+- Any feature-level change (new feature or a nontrivial extension of one): find or create its
+  `docs/goals/<goal>/features/<feature>/` folder. Always append a `task-log.md` entry - that's the
+  mandatory minimum for anything worth documenting. Update `README.md`/`design.md` if user-facing behavior
+  or the technical approach changed.
+- Architecture/system-design change (new subsystem, changed data flow, new integration): update the
+  matching `docs/architecture/*.md` file, or add one.
+- A decision with lasting rationale (a tradeoff, a rejected alternative, a convention change): add an ADR
+  under `docs/decisions/`.
+- Operational change (deployment, monitoring, rollback procedure): update `docs/operations/*.md`.
+- Trivial changes (typo fixes, pure refactors with no behavior change): no doc update required, but when
+  in doubt add at least a one-line `task-log.md` entry.
+- Regenerate `docs/TASKLOGGING.md` (`pnpm docs:tasklog`) whenever any `task-log.md` changed, before
+  finishing the task, and commit it in the same change. Never hand-edit `docs/TASKLOGGING.md` itself.
+- Adding a new goal or feature folder: link it from `docs/index.md` and its goal's `README.md`.
+- Route changes specifically also update `.claude/skills/api-routes/SKILL.md`, the route catalog - that
+  skill file is unaffected by this restructure.
+
+Current capability is whatever `docs/index.md` and the linked goal/feature docs say - unmentioned means
+either not implemented, or shipped before this docs system and not yet backfilled.
 
 ---
 
