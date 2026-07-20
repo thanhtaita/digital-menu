@@ -22,7 +22,7 @@ Key behaviors:
 - Follow-ups work because prior assistant turns replay their stored `recommendations` into LLM history.
 - Diners can like recommendation cards; liked dish names bias future prompts.
 
-Out of scope: admin-configurable prompts per restaurant, embedding-based ranking inside chat (that's the separate pgvector system - see `CLAUDE.md` § System design), production log shipping.
+Out of scope: admin-configurable prompts per restaurant, embedding-based ranking inside chat (that's the separate pgvector system - see `docs/architecture/system-overview.md` § System design), production log shipping.
 
 ## Architecture
 
@@ -236,7 +236,7 @@ Mocking note: `processChat` issues six ordered `db.select` calls (from the three
 
 ## Design decisions
 
-- **LLM over an in-house pipeline for now** - Gemini/OpenAI give zero-shot recommendations from menu text + preferences today; the pgvector embedding pipeline can complement or replace this later (see `CLAUDE.md` § System design for how the two currently coexist).
+- **LLM over an in-house pipeline for now** - Gemini/OpenAI give zero-shot recommendations from menu text + preferences today; the pgvector embedding pipeline can complement or replace this later (see `docs/architecture/system-overview.md` § System design for how the two currently coexist).
 - **One session per (user, restaurant)** for continuity; summarization keeps context bounded.
 - **Batch summarization (10 exchanges)** instead of incremental one-row summaries; aligned with the recent window size.
 - **Summary + 10-exchange window**: verbatim tail for follow-ups, compressed summary for older context.

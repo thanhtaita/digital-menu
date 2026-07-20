@@ -13,8 +13,14 @@ import {
   posts,
   users
 } from "@digital-menu/db";
-import { publicMenuResponseSchema, publicRestaurantListResponseSchema } from "@digital-menu/shared";
+import {
+  publicMenuResponseSchema,
+  publicRestaurantListResponseSchema,
+  publicSearchResponseSchema
+} from "@digital-menu/shared";
 import { buildPostsResponse, POST_SELECT_COLUMNS, FEED_PAGE_SIZE, type RawPostRow } from "../lib/post-helpers.js";
+import { searchCatalog } from "../services/search.js";
+import { SEARCH_RATE_LIMIT } from "../lib/rate-limit.js";
 
 export async function publicMenuRoutes(app: FastifyInstance) {
   app.get("/restaurants", async () => {
@@ -32,6 +38,21 @@ export async function publicMenuRoutes(app: FastifyInstance) {
 
     return publicRestaurantListResponseSchema.parse({ restaurants: rows });
   });
+
+  // GET /public/search?q= — platform-wide search across active restaurants' published menus.
+  app.get<{ Querystring: { q?: string } }>(
+    "/search",
+    { config: { rateLimit: SEARCH_RATE_LIMIT } },
+    async (request) => {
+      const q = request.query.q ?? "";
+      const { restaurants: restaurantResults, dishes: dishResults } = await searchCatalog(q);
+      return publicSearchResponseSchema.parse({
+        query: q.trim(),
+        restaurants: restaurantResults,
+        dishes: dishResults
+      });
+    }
+  );
 
   app.get<{ Params: { slug: string } }>("/restaurants/:slug/menu", async (request, reply) => {
     const slug = request.params.slug;

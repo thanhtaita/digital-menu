@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { SearchBox } from "@/components/search-box";
 
 export function SiteHeader() {
   const { user, loading, logout } = useAuth();
@@ -26,6 +27,7 @@ export function SiteHeader() {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
+          gap: 16,
           padding: "12px 20px",
         }}
       >
@@ -38,10 +40,15 @@ export function SiteHeader() {
             letterSpacing: -0.3,
             color: "var(--ink)",
             textDecoration: "none",
+            flexShrink: 0,
           }}
         >
           the<span style={{ color: "var(--accent)", fontStyle: "italic" }}>Menu</span>
         </Link>
+
+        <div style={{ flex: 1, maxWidth: 360 }}>
+          <SearchBox />
+        </div>
 
         {!loading && (
           <nav style={{ display: "flex", alignItems: "center", gap: 12 }}>

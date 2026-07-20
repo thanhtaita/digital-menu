@@ -43,7 +43,17 @@ Default in `.env.example`:
 - `DATABASE_URL=postgres://postgres:123456@localhost:5433/digital_menu`
 - `PORT=3002` (matches the `cross-env PORT=3002` override baked into `apps/api`'s `dev` script - see `apps/api/package.json`)
 
-### 3. Database: schema changes and migrate
+### 3. Git hooks
+
+Run once after cloning to activate the repo's git hooks (currently: a `commit-msg` check that flags
+`apps/`/`packages/` changes with no corresponding `docs/` update - see `CLAUDE.md`'s "which doc to touch"
+contract):
+
+```bash
+bash scripts/setup-hooks.sh
+```
+
+### 4. Database: schema changes and migrate
 
 **Adding tables/columns** (agents and humans): edit `packages/db/src/schema/schema.ts`, then generate — do not hand-write SQL in `packages/db/drizzle/`:
 
@@ -58,9 +68,9 @@ pnpm --filter @digital-menu/db drizzle:migrate
 pnpm --filter @digital-menu/db drizzle:migrate
 ```
 
-After migrate, confirm new tables exist. If migrate says success but tables are missing, a prior migration may be stuck — see **Reset** below or `CLAUDE.md` §7.
+After migrate, confirm new tables exist. If migrate says success but tables are missing, a prior migration may be stuck — see **Reset** below or `docs/architecture/known-gaps.md`.
 
-### 4. Seed test data (optional)
+### 5. Seed test data (optional)
 
 Load ingredients + aliases into `ingredients` and `ingredient_aliases`, then seed demo restaurants and menus:
 
@@ -99,7 +109,7 @@ without it, ingredients just have no nutrition panel (`nutrients` stays empty, n
    download, not app-owned content - every clone needs to fetch it separately.
 2. Install the loader's one Python dependency: `pip install psycopg2-binary`.
 3. Load it into a dedicated `fdc` Postgres schema (separate from the Drizzle-managed `public` schema,
-   not tracked by migrations - see `CLAUDE.md`'s "Reference data" section for why):
+   not tracked by migrations - see `docs/architecture/fdc-reference-data.md` for why):
    ```bash
    python resources/fdc-data/import/load.py --reset
    ```

@@ -30,7 +30,7 @@ Neither mechanism talks to the other. A translation added via `dish_translations
 
 `ingredients.nutrients` (jsonb) is populated by matching against the read-only `fdc` Postgres schema
 (USDA FoodData Central, multi-source - Foundation Foods + SR Legacy + Survey/FNDDS, Branded Foods
-deliberately excluded - loaded per `CLAUDE.md`'s "Reference data" section - `resources/fdc-data/import/schema.sql`
+deliberately excluded - loaded per `docs/architecture/fdc-reference-data.md` - `resources/fdc-data/import/schema.sql`
 + `load.py`). `fdc.*` is never queried live at request time - values are denormalized into
 `ingredients.nutrients`/`fdc_id`/`food_category` once, at backfill/accept time.
 

@@ -18,6 +18,8 @@ apps/api/logs/
 
 # USDA FoodData Central raw data (large third-party download, not app-owned content).
 # Only resources/fdc-data/import/ (the loader tooling) is tracked - re-download the CSVs
-# per CLAUDE.md's "Reference data" section / resources/fdc-data/import/load.py.
+# per docs/architecture/fdc-reference-data.md / resources/fdc-data/import/load.py.
 resources/fdc-data/*.csv
 resources/fdc-data/*.xlsx
+# Local Claude Code settings
+.claude/settings.local.json

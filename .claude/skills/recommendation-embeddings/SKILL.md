@@ -8,7 +8,7 @@ description: Design of the pgvector semantic recommendation system (implemented 
 This merges several design docs that used to live under `plans/` (`recommendation-system.md`, `unified-recommendation-system.md`, `embedding-recommendations.md`, `embedding-features.txt`, `ai-ingredient-suggestion.md`) into one reference. Two features share this skill because they're both AI-assisted matching problems against the ingredient/dish data, but they are otherwise independent:
 
 1. **Semantic dish recommendations** (pgvector) - partially implemented, missing the embedding-generation service.
-2. **AI ingredient suggestions** (Gemini/OpenAI) - Phase 1 implemented; see `CLAUDE.md` § Features implemented and the `api-routes` skill for the current route/contract. This skill only covers its *future* phases.
+2. **AI ingredient suggestions** (Gemini/OpenAI) - Phase 1 implemented; see the `api-routes` skill for the current route/contract. This skill only covers its *future* phases.
 
 ## 1. Semantic dish recommendations (pgvector)
 
@@ -77,7 +77,7 @@ PostgreSQL (same DB as Fastify) ←→ Ollama (nomic-embed-text, http://localhos
 
 ## 2. AI ingredient suggestions - future phases
 
-Phase 1 (Gemini-based suggestion + pg_trgm fuzzy matching + auto-create pending ingredients) is implemented - see `CLAUDE.md` § Features implemented (`apps/api`) and the `api-routes` skill for the current `POST /dishes/suggest-ingredients` contract. The original plan's later phases, not yet built:
+Phase 1 (Gemini-based suggestion + pg_trgm fuzzy matching + auto-create pending ingredients) is implemented - see the `api-routes` skill for the current `POST /dishes/suggest-ingredients` contract. The original plan's later phases, not yet built:
 
 - **Phase 2 - enhanced matching**: check `ingredient_aliases` during matching (not just canonical name); build a small synonym dictionary (e.g. "scallion"/"green onion"/"spring onion"); only add pgvector semantic matching for ingredient names if fuzzy matching's false-negative rate proves too high (>20%) - not needed preemptively.
 - **Phase 3 - learning/optimization**: an `ai_suggestion_feedback` table tracking accept/reject per suggestion, to eventually tune prompts or matching thresholds; restaurant-specific suggestion boosting (e.g. a Thai restaurant's existing menu nudges toward "fish sauce", "galangal"); a bulk "generate for all dishes without ingredients" batch job.

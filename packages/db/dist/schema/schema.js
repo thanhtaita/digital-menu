@@ -53,7 +53,9 @@ export const restaurants = pgTable("restaurants", {
         .references(() => users.id, { onDelete: "restrict" }),
     isActive: boolean("is_active").notNull().default(true)
 }, (table) => ({
-    slugIdx: uniqueIndex("restaurants_slug_unique").on(table.slug)
+    slugIdx: uniqueIndex("restaurants_slug_unique").on(table.slug),
+    nameTrgmIdx: index("restaurants_name_trgm").using("gin", table.name.op("gin_trgm_ops")),
+    descriptionTrgmIdx: index("restaurants_description_trgm").using("gin", table.description.op("gin_trgm_ops"))
 }));
 /** Menus belonging to a restaurant. Referenced by menu_sections. */
 export const menus = pgTable("menus", {
@@ -86,7 +88,10 @@ export const dishes = pgTable("dishes", {
     imageUrl: text("image_url"),
     isAvailable: boolean("is_available").notNull().default(true),
     displayOrder: integer("display_order").notNull().default(0)
-});
+}, (table) => ({
+    nameTrgmIdx: index("dishes_name_trgm").using("gin", table.name.op("gin_trgm_ops")),
+    descriptionTrgmIdx: index("dishes_description_trgm").using("gin", table.description.op("gin_trgm_ops"))
+}));
 /** Ordered images and videos for a dish (public URLs: /uploads/... or https://). */
 export const dishMedia = pgTable("dish_media", {
     id: serial("id").primaryKey(),

@@ -2,8 +2,10 @@ import { cache } from "react";
 import {
   publicMenuResponseSchema,
   publicRestaurantListResponseSchema,
+  publicSearchResponseSchema,
   type PublicMenuResponse,
-  type PublicRestaurantListResponse
+  type PublicRestaurantListResponse,
+  type PublicSearchResponse
 } from "@digital-menu/shared";
 
 function getApiBase(): string {
@@ -37,3 +39,14 @@ export const fetchPublicRestaurants = cache(async function fetchPublicRestaurant
   const parsed = publicRestaurantListResponseSchema.parse(json);
   return parsed.restaurants;
 });
+
+export async function fetchPublicSearch(q: string): Promise<PublicSearchResponse> {
+  const res = await fetch(`${getApiBase()}/public/search?q=${encodeURIComponent(q)}`, {
+    cache: "no-store"
+  });
+  if (!res.ok) {
+    throw new Error(`Search request failed (${res.status})`);
+  }
+  const json: unknown = await res.json();
+  return publicSearchResponseSchema.parse(json);
+}
