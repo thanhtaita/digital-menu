@@ -68,6 +68,22 @@ When in doubt, follow patterns already used in these folders before inventing ne
 - Use Fastify's `inject` (not a custom HTTP client) for API route tests.
 - Mirror the current frontend testing approach (Testing Library + jsdom).
 - Prefer extending existing test files over creating many small new ones.
+- **Promotion rule:** verify behavior interactively while building (manual `inject` calls, browser
+  checks), but before calling a change done, promote anything that represents a real behavior contract
+  into a committed, automated test - a manual check paid for once is cheaper than one silently re-paid on
+  every future change.
+- **Target shape:** a pyramid. Most coverage stays in fast Vitest unit tests (current strength - keep as
+  is); a thinner layer of integration tests exercises real component boundaries instead of mocks; a thin
+  top layer of end-to-end tests is reserved for the handful of critical user journeys.
+- **Known gap - API/DB boundary:** `apps/api/src/__tests__` mocks Drizzle/Postgres at the module boundary
+  (`vi.mock("../lib/db.js", ...)`), which structurally can't catch real SQL/schema drift. Documented
+  target, not yet built: a small integration suite that runs real queries against a throwaway test
+  Postgres instance (e.g. testcontainers), reserved for the boundary-sensitive paths where mocked coverage
+  is riskiest.
+- **Known gap - no e2e tier:** there is no Playwright (or equivalent) suite today, despite
+  `apps/diner-app` (Next.js) and `apps/admin-portal` (Vite/React-Router) both being Playwright-compatible.
+  Documented target, not yet built: a thin Playwright suite covering the diner ordering flow and the admin
+  menu-builder flow, kept intentionally small given e2e's cost/flakiness tradeoff.
 
 ---
 
@@ -140,3 +156,12 @@ either not implemented, or shipped before this docs system and not yet backfille
 3. `docs/` (task-log at minimum, plus the touched skill file(s)) must stay in sync with code changes (§9).
 4. Code style & testing should match existing patterns.
 5. Scope discipline (§5).
+
+---
+
+## Maintaining this file
+
+Keep this file for knowledge useful to almost every future agent session in this project.
+Do not repeat what the codebase already shows; point to the authoritative file or command instead.
+Prefer rewriting or pruning existing entries over appending new ones.
+When updating this file, preserve this bar for all agents and keep entries concise.
