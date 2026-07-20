@@ -30,6 +30,13 @@ const MENU_SEED_PATHS = [
   join(__dirname, "../data/ai-test-menu-seed.json")
 ];
 
+const SUPERADMIN_SEED: OwnerSeed = {
+  email: "admin@digital-menu.test",
+  password: "changeme123",
+  displayName: "Platform Admin",
+  role: "superadmin"
+};
+
 type DishMediaSeed = {
   url: string;
   kind: "image" | "video";
@@ -442,6 +449,9 @@ async function seed() {
   for (const bundle of data.restaurants) {
     await seedRestaurantBundle(db, bundle, slugToId);
   }
+
+  await db.transaction((tx) => upsertOwner(tx, SUPERADMIN_SEED));
+  console.log(`  Seeded superadmin "${SUPERADMIN_SEED.email}"`);
 
   const restaurantCount = await db.select().from(restaurants);
   const menuCount = await db.select().from(menus);

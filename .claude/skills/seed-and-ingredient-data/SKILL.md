@@ -16,6 +16,8 @@ For each restaurant bundle, `seed-menu-data.ts` upserts: owner user (bcrypt-hash
 
 `packages/seed/data/*.json` fixtures are hand-authored, not DB dumps: a `RestaurantBundle[]` shape (owner + restaurant + menus[] with nested sections/dishes/media/ingredients/translations). `menu-seed.json` is the general sample restaurant ("Bella Cucina"); `ai-test-menu-seed.json` is "Polar Palate" - 15 deliberately polarizing dishes built to exercise the AI chat/recommendation feature.
 
+After the restaurant bundles, `seed-menu-data.ts` also upserts one **superadmin** test account (`SUPERADMIN_SEED` constant, not from a JSON fixture) via the same `upsertOwner()` helper: `admin@digital-menu.test` / `changeme123`. This is the only way to get a `superadmin` user - `POST /register` can only ever create `restaurant_admin` or `diner` (see `apps/api/src/routes/auth.ts`), so there's no self-serve path to the role that approves FDC/diet-tag candidates and pending ingredients in the admin portal.
+
 ## The two i18n mechanisms (not unified - don't assume they are)
 
 The schema has two genuinely different localization mechanisms that serve different purposes:

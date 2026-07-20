@@ -90,6 +90,8 @@ Both scripts build `@digital-menu/db` before running. Safe to re-run (idempotent
 - `[packages/seed/data/menu-seed.json](packages/seed/data/menu-seed.json)` — **Bella Cucina** (`bella-cucina`, owner `chef@bella-cucina.test` / `changeme123`)
 - `[packages/seed/data/ai-test-menu-seed.json](packages/seed/data/ai-test-menu-seed.json)` — **Polar Palate** (`polar-palate`, owner `chef@polar-palate.test` / `changeme123`) — 15 polarizing dishes for AI recommendation QA
 
+`seed:menus` also creates a **superadmin** account: `admin@digital-menu.test` / `changeme123`. Log in with it at the admin portal to approve pending ingredients, FDC nutrition matches, and diet-tag candidates — self-registration can only create `restaurant_admin`/`diner` accounts, so this seeded user is the only way to reach that role locally.
+
 After seeding menus, verify:
 
 - `GET http://localhost:3002/api/v1/public/restaurants`
