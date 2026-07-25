@@ -57,11 +57,14 @@ Durable architectural decisions with lasting rationale, one file per decision:
   standardizing local-dev API port references on 3002.
 - [`decisions/ADR-003-postgres-search-not-dedicated-engine.md`](./decisions/ADR-003-postgres-search-not-dedicated-engine.md) -
   platform-wide search stays inside Postgres (`pg_trgm`), no dedicated search engine.
+- [`decisions/ADR-004-deployment-platform-neon-render-vercel.md`](./decisions/ADR-004-deployment-platform-neon-render-vercel.md) -
+  deployment platform choice (Neon + Render + Vercel Hobby), alternatives rejected, and the Vercel Hobby
+  ToS tradeoff.
 
 ## Operations
 
-- [`operations/deployment.md`](./operations/deployment.md) - deployment/monitoring/rollback, documented as
-  it really is today (local dev only - no deployment config exists yet).
+- [`operations/deployment.md`](./operations/deployment.md) - deployment runbook: which service hosts
+  what, env vars, manual account-setup steps, and the graduation path off free tiers.
 
 ## Releases
 
