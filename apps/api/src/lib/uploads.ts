@@ -2,6 +2,7 @@ import { mkdir, writeFile, unlink } from "fs/promises";
 import { join } from "path";
 import { randomUUID } from "crypto";
 import type { MultipartFile } from "@fastify/multipart";
+import { r2MediaStorage } from "./uploads-r2.js";
 
 /** Public URL prefix (served by @fastify/static). */
 export const UPLOAD_PUBLIC_PREFIX = "/uploads";
@@ -51,11 +52,11 @@ export function mediaKindFromMime(mime: string): MediaKind | undefined {
   return undefined;
 }
 
-function extForMediaMime(mime: string): string | undefined {
+export function extForMediaMime(mime: string): string | undefined {
   return extForImageMime(mime) ?? extForVideoMime(mime);
 }
 
-function maxBytesForMime(mime: string): number {
+export function maxBytesForMime(mime: string): number {
   return IMAGE_MIME_TO_EXT.has(mime) ? MAX_IMAGE_BYTES : MAX_VIDEO_BYTES;
 }
 
@@ -119,6 +120,14 @@ export const localMediaStorage: MediaStorage = {
   save: localSave,
   deleteByPublicUrl: deleteLocalUploadByPublicUrl
 };
+
+/**
+ * Storage driver selector. Set STORAGE_DRIVER=r2 to route all uploads through Cloudflare R2
+ * instead of local disk; any other value (or unset) keeps today's local-disk behavior with
+ * zero configuration. The R2 client/env vars are only touched when "r2" is actually selected.
+ */
+export const mediaStorage: MediaStorage =
+  process.env.STORAGE_DRIVER === "r2" ? r2MediaStorage : localMediaStorage;
 
 /**
  * Reads one multipart file, validates type/size, writes via storage (default: local disk).

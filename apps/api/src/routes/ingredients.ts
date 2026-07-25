@@ -27,7 +27,7 @@ import {
 import { getSession, getSessionIdFromCookie } from "../lib/auth.js";
 import { SEARCH_RATE_LIMIT } from "../lib/rate-limit.js";
 import {
-  localMediaStorage,
+  mediaStorage,
   saveMultipartImage,
   saveMultipartMedia,
 } from "../lib/uploads.js";
@@ -615,7 +615,7 @@ export async function ingredientRoutes(app: FastifyInstance) {
     const saved = await saveMultipartMedia(
       file,
       "ingredients",
-      localMediaStorage,
+      mediaStorage,
     );
     if (!saved.ok) {
       return reply
@@ -787,7 +787,7 @@ export async function ingredientRoutes(app: FastifyInstance) {
       }
 
       await db.delete(ingredientMedia).where(eq(ingredientMedia.id, mediaId));
-      await localMediaStorage.deleteByPublicUrl(mediaRow.url);
+      await mediaStorage.deleteByPublicUrl(mediaRow.url);
 
       const mediaList = await db
         .select()

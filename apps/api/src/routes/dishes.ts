@@ -5,7 +5,7 @@ import { dishes, menuSections, menus, dishMedia, dishTranslations } from "@digit
 import { createDishSchema, updateDishSchema, reorderDishMediaSchema, upsertTranslationSchema } from "@digital-menu/shared";
 import { requireAuth } from "../middleware/auth.js";
 import { canUserManageRestaurantWithRole } from "../lib/restaurant-access.js";
-import { localMediaStorage, saveMultipartImage, saveMultipartMedia } from "../lib/uploads.js";
+import { mediaStorage, saveMultipartImage, saveMultipartMedia } from "../lib/uploads.js";
 
 function parsePrice(value: string | number): string {
   if (typeof value === "number") return String(value);
@@ -160,7 +160,7 @@ export async function dishRoutes(app: FastifyInstance) {
       if (!menu || menu.restaurantId !== restaurantId) return reply.status(404).send({ error: "Dish not found" });
 
       const file = await request.file();
-      const saved = await saveMultipartMedia(file, "dishes", localMediaStorage);
+      const saved = await saveMultipartMedia(file, "dishes", mediaStorage);
       if (!saved.ok) {
         return reply.status(saved.status).send({ error: saved.error, code: saved.code });
       }
@@ -268,7 +268,7 @@ export async function dishRoutes(app: FastifyInstance) {
     if (!row || row.dishId !== dishId) return reply.status(404).send({ error: "Media not found" });
 
     await db.delete(dishMedia).where(eq(dishMedia.id, mediaId));
-    await localMediaStorage.deleteByPublicUrl(row.url);
+    await mediaStorage.deleteByPublicUrl(row.url);
     return reply.status(204).send();
   });
 
