@@ -1,0 +1,23 @@
+name: Keep API and DB warm
+
+on:
+  schedule:
+    # Every 12 minutes: inside Render's free-tier 15-minute sleep window, and inside
+    # Neon's 5-minute autosuspend window often enough that the next real request just
+    # rides the ping's already-resumed connection.
+    - cron: "*/12 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping health check
+        env:
+          HEALTH_URL: ${{ vars.API_HEALTH_URL }}
+        run: |
+          if [ -z "$HEALTH_URL" ]; then
+            echo "API_HEALTH_URL repository variable is not set; skipping ping." >&2
+            exit 1
+          fi
+          curl -fsS --max-time 30 "$HEALTH_URL"

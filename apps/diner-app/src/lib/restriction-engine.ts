@@ -1,4 +1,4 @@
-import type { RestrictionResponse } from "@digital-menu/shared";
+import type { RestrictionResponse, DietType } from "@digital-menu/shared";
 import type { PublicDishIngredient } from "@digital-menu/shared";
 
 export type DishStatus = "safe" | "warn" | "blocked";
@@ -7,12 +7,12 @@ export type DishStatus = "safe" | "warn" | "blocked";
  * True if this ingredient is known to violate the given diet type. Missing dietTags, or a missing key
  * for this diet type, means no signal (never treated as a violation) - only an explicit `false` blocks.
  */
-function violatesDiet(ingredient: PublicDishIngredient, dietType: string): boolean {
+function violatesDiet(ingredient: PublicDishIngredient, dietType: DietType): boolean {
   const compatible = ingredient.dietTags?.[dietType];
   return compatible === false;
 }
 
-function dishViolatesDiet(dishIngredients: PublicDishIngredient[], dietType: string): boolean {
+function dishViolatesDiet(dishIngredients: PublicDishIngredient[], dietType: DietType): boolean {
   return dishIngredients.some((ing) => violatesDiet(ing, dietType));
 }
 
@@ -36,7 +36,7 @@ export function getDishStatus(
     let matches: boolean;
     if (r.restrictionType === "diet") {
       if (!r.dietType) continue;
-      matches = dishViolatesDiet(dishIngredients, r.dietType);
+      matches = dishViolatesDiet(dishIngredients, r.dietType as DietType);
     } else {
       if (!r.ingredientId || !ingredientIds.has(r.ingredientId)) continue;
       matches = true;
@@ -57,7 +57,7 @@ export function getMatchingRestrictions(
   const ingredientIds = new Set(dishIngredients.map((i) => i.ingredientId));
   return restrictions.filter((r) => {
     if (r.restrictionType === "diet") {
-      return r.dietType != null && dishViolatesDiet(dishIngredients, r.dietType);
+      return r.dietType != null && dishViolatesDiet(dishIngredients, r.dietType as DietType);
     }
     return r.ingredientId != null && ingredientIds.has(r.ingredientId);
   });

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import type { PostResponse } from "@digital-menu/shared";
-import { apiGetRestaurantPosts, apiCreatePost } from "@/lib/api-client";
+import { apiGetRestaurantPosts } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
 import { PostFeed } from "./PostFeed";
 import { PostComposer } from "./PostComposer";

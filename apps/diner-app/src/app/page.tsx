@@ -5,6 +5,8 @@ import { MetaLine } from "@/components/atoms";
 import { RestaurantCover } from "@/components/dish-gradient";
 import { SearchBox } from "@/components/search-box";
 
+export const dynamic = "force-dynamic";
+
 export default async function Home() {
   const restaurants = await fetchPublicRestaurants();
 
