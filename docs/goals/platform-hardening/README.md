@@ -26,3 +26,5 @@ unthrottled by design scope, not oversight - see
 - [`features/llm-and-search-rate-limiting/`](./features/llm-and-search-rate-limiting/README.md) -
   per-session (falling back to per-IP) rate limits on `/chat`, `/chat/stream`,
   `/dishes/suggest-ingredients`, and `GET /ingredients`.
+- [`features/r2-object-storage-uploads/`](./features/r2-object-storage-uploads/README.md) - Cloudflare R2
+  storage backend for dish/ingredient photo and video uploads, selectable via `STORAGE_DRIVER=r2`.

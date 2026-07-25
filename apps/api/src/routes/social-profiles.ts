@@ -5,7 +5,7 @@ import { users, posts, userFollows, restaurants } from "@digital-menu/db";
 import { updateProfileSchema } from "@digital-menu/shared";
 import { requireAuth } from "../middleware/auth.js";
 import { getSessionIdFromCookie, getSession } from "../lib/auth.js";
-import { saveMultipartImage, localMediaStorage } from "../lib/uploads.js";
+import { saveMultipartImage, mediaStorage } from "../lib/uploads.js";
 import { buildPostsResponse, POST_SELECT_COLUMNS, FEED_PAGE_SIZE, type RawPostRow } from "../lib/post-helpers.js";
 
 export async function socialProfileRoutes(app: FastifyInstance) {
@@ -135,7 +135,7 @@ export async function socialProfileRoutes(app: FastifyInstance) {
     if (!auth) return;
 
     const file = await request.file();
-    const saved = await saveMultipartImage(file, "avatars", localMediaStorage);
+    const saved = await saveMultipartImage(file, "avatars", mediaStorage);
     if (!saved.ok) return reply.status(saved.status).send({ error: saved.error, code: saved.code });
 
     await db.update(users).set({ avatarUrl: saved.imageUrl }).where(eq(users.id, auth.user.userId));

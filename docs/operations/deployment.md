@@ -109,11 +109,12 @@ Once set:
 
 ## Known limitations of this setup (accepted for the demo phase)
 
-- **Uploads are ephemeral on Render's free tier.** `apps/api/src/lib/uploads.ts` writes dish/ingredient
-  photo uploads to local disk (`UPLOAD_DIR`); Render's free filesystem is wiped on every
-  sleep/restart/redeploy. The seeded demo catalog is unaffected (seed data doesn't reference local
-  upload paths); only photos uploaded live during a session are at risk. Accepted as a known tradeoff -
-  see "Graduation path" for the fix if it becomes a real problem.
+- **Uploads are ephemeral on Render's free tier unless R2 is enabled.** `apps/api/src/lib/uploads.ts`
+  defaults to writing dish/ingredient photo/video uploads to local disk (`UPLOAD_DIR`); Render's free
+  filesystem is wiped on every sleep/restart/redeploy. The seeded demo catalog is unaffected (seed data
+  doesn't reference local upload paths); only photos uploaded live during a session are at risk. See
+  "Object storage for uploads" below to switch Render's API service to durable Cloudflare R2 storage
+  instead of accepting this tradeoff.
 - **Vercel Hobby's non-commercial ToS** applies to both frontends - a consciously-made tradeoff, not an
   oversight. See ADR-004.
 - **Cold start after long idle periods can still happen** if the keep-alive workflow is disabled, GitHub
@@ -156,9 +157,38 @@ None of these require a platform switch or a rewrite - they are plan upgrades on
   metered usage) is the natural next stop - better DX, comparable price, no free tier of its own to fall
   back to.
 - **Object storage for uploads** (local disk → Cloudflare R2, S3-compatible, free tier: 10 GB storage,
-  zero egress fees): a contained change scoped to `apps/api/src/lib/uploads.ts`, not a rearchitecture.
-  Worth doing before Render Starter if live photo uploads during demos are the primary way people use the
-  product; otherwise the Starter disk fixes it as a side effect of a plan upgrade already being made.
+  zero egress fees): implemented as a second `MediaStorage` backend (`apps/api/src/lib/uploads-r2.ts`),
+  selected via an env var - not a rearchitecture. Worth enabling before Render Starter if live photo
+  uploads during demos are the primary way people use the product; otherwise the Starter disk fixes the
+  ephemeral-storage problem as a side effect of a plan upgrade already being made, and R2 can stay off.
+
+  **To enable it (manual steps, captain does these in the Cloudflare dashboard):**
+  1. Create a Cloudflare account if one doesn't exist yet, then create an R2 bucket (R2 → Create bucket).
+     Any bucket name works; it goes into `R2_BUCKET` below.
+  2. Enable public access on the bucket so uploaded media is servable without signed URLs: bucket
+     Settings → Public Access → enable the `r2.dev` subdomain (fastest, gives a URL like
+     `https://pub-xxxxxxxx.r2.dev`), or connect a custom domain (e.g. `media.yourdomain.com`) via
+     Settings → Custom Domains for a branded URL. Either way, note the resulting base URL.
+  3. Create an API token scoped to R2: R2 → Manage R2 API Tokens → Create API Token, permission "Object
+     Read & Write", scoped to the bucket from step 1. Save the Access Key ID and Secret Access Key shown
+     (the secret is only shown once). Note the Account ID shown on the R2 overview page.
+  4. On Render, set these env vars on the API service (Render dashboard → service → Environment):
+
+     | Env var | Value |
+     |---|---|
+     | `STORAGE_DRIVER` | `r2` |
+     | `R2_ACCOUNT_ID` | Account ID from step 3 |
+     | `R2_ACCESS_KEY_ID` | Access Key ID from step 3 |
+     | `R2_SECRET_ACCESS_KEY` | Secret Access Key from step 3 |
+     | `R2_BUCKET` | Bucket name from step 1 |
+     | `R2_PUBLIC_BASE_URL` | Base URL from step 2 (e.g. `https://pub-xxxxxxxx.r2.dev`, no trailing slash) |
+
+  5. Redeploy the API service so the new env vars take effect.
+
+  With `STORAGE_DRIVER` unset (or any value other than `r2`), the API keeps using local disk with zero
+  configuration - local dev is unaffected and needs no R2 credentials. If `STORAGE_DRIVER=r2` is set but
+  any `R2_*` var above is missing, uploads fail loudly with a clear error rather than silently falling
+  back to ephemeral local storage.
 
 ## When this needs to change
 

@@ -5,7 +5,7 @@ import { posts, postMedia, postLikes, postComments, users, restaurants } from "@
 import { createPostSchema, createCommentSchema } from "@digital-menu/shared";
 import { requireAuth } from "../middleware/auth.js";
 import { getSessionIdFromCookie, getSession } from "../lib/auth.js";
-import { saveMultipartMedia, localMediaStorage } from "../lib/uploads.js";
+import { saveMultipartMedia, mediaStorage } from "../lib/uploads.js";
 import { buildPostsResponse, POST_SELECT_COLUMNS, FEED_PAGE_SIZE, type RawPostRow } from "../lib/post-helpers.js";
 
 export async function socialPostRoutes(app: FastifyInstance) {
@@ -334,7 +334,7 @@ export async function socialPostRoutes(app: FastifyInstance) {
     if (post.authorId !== auth.user.userId) return reply.status(403).send({ error: "Forbidden", code: "FORBIDDEN" });
 
     const file = await request.file();
-    const saved = await saveMultipartMedia(file, "posts", localMediaStorage);
+    const saved = await saveMultipartMedia(file, "posts", mediaStorage);
     if (!saved.ok) return reply.status(saved.status).send({ error: saved.error, code: saved.code });
 
     const currentMedia = await db
