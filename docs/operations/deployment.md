@@ -39,7 +39,13 @@ Total steady-state cost: **$0/month**. See "Graduation path" below for what chan
 1. Create a Render account and connect the `digital-menu` GitHub repo.
 2. Create a new **Web Service** from that repo:
    - **Root Directory:** repo root (the build command below runs Turborepo from the root).
-   - **Build Command:** `pnpm install && pnpm turbo build --filter=@digital-menu/api`
+   - **Build Command:** `pnpm install --prod=false && pnpm turbo build --filter=@digital-menu/api`
+     - The `--prod=false` is not optional: `NODE_ENV=production` (set in step 3 below) is visible to the
+       build step too, and pnpm's default behavior is to skip `devDependencies` whenever `NODE_ENV` is
+       `production` (visible in the build log as `devDependencies: skipped because NODE_ENV is set to
+       production`). `turbo` itself is a root `devDependencies` entry, so without this flag the build
+       fails with `ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL Command "turbo" not found`. `--prod=false` forces a
+       full install irrespective of `NODE_ENV`.
    - **Start Command:** `pnpm --filter @digital-menu/api start` (equivalent to `node apps/api/dist/index.js`)
    - **Instance Type:** Free
 3. Set the environment variables below in the Render dashboard (Environment tab):
@@ -106,6 +112,29 @@ Once set:
 | Vercel (diner-app) | `NEXT_PUBLIC_API_BASE_URL` | `https://<render-api-domain>/api/v1` | |
 | GitHub Actions (repo secret) | `DATABASE_URL` | Neon direct connection string | Used by `migrate.yml` |
 | GitHub Actions (repo variable) | `API_HEALTH_URL` | `https://<render-api-domain>/api/v1/health` | Used by `keep-alive.yml` |
+
+## Troubleshooting a fresh deploy
+
+Two issues surfaced the first time the API was actually deployed to Render (2026-07-25) and are recorded
+here since neither would show up in local dev:
+
+- **Build fails with `ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL Command "turbo" not found"`.** Caused by
+  `NODE_ENV=production` (required, see step 2 above) making pnpm skip `devDependencies` - `turbo` is a
+  root `devDependencies` entry. Fixed by adding `--prod=false` to the Build Command's `pnpm install`, as
+  already reflected in step 2 above.
+- **Start command exits immediately with "No open ports detected" even though the build succeeded.** The
+  real error is printed by `console.error(err)` in `apps/api/src/index.ts` just above Render's "Exited
+  with status 1" line - check that first before assuming a port-binding problem, since the app never
+  reaches `app.listen()` if `buildApp()` rejects. In this case the cause was
+  `ERR_MODULE_NOT_FOUND` on `packages/shared/dist/index.js`: `packages/shared/src/*.ts` used relative
+  imports/exports without `.js` extensions (e.g. `export * from "./image-url"`). `tsconfig.base.json`'s
+  `moduleResolution: "Node"` lets `tsc` compile those through unchanged, but Node's native ESM loader
+  (triggered by `"type": "module"` in `packages/shared/package.json`) requires explicit extensions on
+  relative imports at runtime. Vite/tsx/Vitest all resolve extensionless imports fine, which is why this
+  was invisible until the compiled `dist/index.js` actually ran under plain `node`. Fixed by adding `.js`
+  extensions throughout `packages/shared/src` (`apps/api/src` and `packages/db/src` already did this
+  correctly). If this class of error resurfaces in a new package, the fix is the same: every relative
+  import/export in that package's `src/` needs an explicit `.js` extension.
 
 ## Known limitations of this setup (accepted for the demo phase)
 

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { dietTypeEnum } from "./diet-types";
+import { dietTypeEnum } from "./diet-types.js";
 
 export const restrictionTypeEnum = z.enum(["allergy", "dislike", "diet"]);
 

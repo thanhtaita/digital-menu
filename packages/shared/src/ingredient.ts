@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { imageUrlFieldSchema } from "./image-url";
+import { imageUrlFieldSchema } from "./image-url.js";
 
 /** Body for creating a canonical ingredient (global dictionary). Only superadmin may call the API. */
 export const createIngredientSchema = z.object({

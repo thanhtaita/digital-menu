@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { dietTypeEnum } from "./diet-types";
+import { dietTypeEnum } from "./diet-types.js";
 
 export const dietTagConfidenceEnum = z.enum(["high", "medium", "low"]);
 export type DietTagConfidence = z.infer<typeof dietTagConfidenceEnum>;

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ingredientDietTagsSchema } from "./diet-tagging";
+import { ingredientDietTagsSchema } from "./diet-tagging.js";
 
 export const publicDishMediaSchema = z.object({
   id: z.number(),

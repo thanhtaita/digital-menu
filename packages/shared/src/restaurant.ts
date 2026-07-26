@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { imageUrlFieldSchema } from "./image-url";
+import { imageUrlFieldSchema } from "./image-url.js";
 
 export const createRestaurantSchema = z.object({
   name: z.string().min(1).max(200),
