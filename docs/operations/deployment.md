@@ -70,6 +70,10 @@ this via per-project Root Directory, not a single project):
 - Root Directory: `apps/admin-portal`
 - Framework: Vite (auto-detected)
 - Env var: `VITE_API_BASE_URL` = `https://<render-api-domain>/api/v1`
+- `apps/admin-portal/vercel.json` rewrites all paths to `/index.html` - required because this is a
+  client-side-routed SPA (`react-router-dom`'s `BrowserRouter`), and Vercel's static file server 404s any
+  path with no matching physical file (e.g. `/login`) unless told to fall back to `index.html`. Without
+  this, direct navigation, refreshes, and deep links to any route other than `/` 404.
 
 **Project 2 - diner-app:**
 - Root Directory: `apps/diner-app`
