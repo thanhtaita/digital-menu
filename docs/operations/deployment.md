@@ -139,6 +139,17 @@ here since neither would show up in local dev:
   extensions throughout `packages/shared/src` (`apps/api/src` and `packages/db/src` already did this
   correctly). If this class of error resurfaces in a new package, the fix is the same: every relative
   import/export in that package's `src/` needs an explicit `.js` extension.
+- **`migrate.yml`'s `pnpm/action-setup@v4` step fails with "Multiple versions of pnpm specified",
+  silently skipping every step after it (including the actual `drizzle:migrate` run) - leaving Neon
+  with no schema at all.** Every API request that touches the database then fails with Postgres error
+  `42P01` (`relation "X" does not exist"`), which can surface to the diner-app as an unhandled 404/500
+  depending on what state the request was in. Caused by passing an explicit `version:` input to
+  `pnpm/action-setup@v4` when the root `package.json` already declares `"packageManager": "pnpm@9.0.0"`
+  - the action treats having both as an unresolvable conflict and fails rather than picking one. Fixed
+  by dropping the `version:` input from the action-setup step in `migrate.yml` and letting it read the
+  version from `packageManager` instead. Check the Actions tab for `migrate.yml` run history after any
+  fresh deploy to confirm this step (and the whole workflow) actually succeeded - a failed migration
+  run does not block or fail the Render/Vercel deploys, so it fails silently unless someone checks.
 
 ## Known limitations of this setup (accepted for the demo phase)
 
