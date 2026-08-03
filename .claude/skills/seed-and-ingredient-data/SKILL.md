@@ -124,6 +124,14 @@ LLM-assisted backfill (mirrors the FDC nutrition backfill above), consumed by
 
 This section is design rationale for future work, absorbed from a design plan (`plans/260628_ingredient_translation_pipeline_design_plan.txt`, now merged here and deleted as a standalone file). **None of this exists in `schema.ts` today** - no `translation_jobs`, `ingredient_nutrition`, `is_human_reviewed`, or `ingredient_translation_history` tables. Treat it as aspirational unless a task explicitly asks you to build it.
 
+**A simpler, already-shipped version of "AI as first pass" exists**: see
+[`docs/goals/internationalization/features/ai-auto-translation/`](../../../docs/goals/internationalization/features/ai-auto-translation/README.md).
+It covers dishes as well as ingredients, but is deliberately lazy/on-demand (generates only on a diner's
+first request for a given locale, not eagerly on every create/edit) and has no job table, no human-review
+queue, and no version history - it's `ai_content_translations`, a disposable hash-keyed cache, not the
+audited pipeline described below. The "define English as canonical, never translate from a translation"
+rule below is already enforced by that implementation too.
+
 ### Is the ingredient entity design right?
 
 Yes - ingredient-as-canonical-entity is correct, but it's doing multiple jobs (hyperlink/search, multilingual display, macro-nutrient calculation, dish relationships) and each job needs its own table. **The canonical ingredient is the source of truth; translations, nutrition, and aliases all hang off it - never flatten them into one table** (e.g. don't add `name_ja`/`name_fr` columns directly on `ingredients`; that requires an `ALTER TABLE` per new language).

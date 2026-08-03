@@ -26,6 +26,7 @@ import {
   RestrictionFlag,
   NutritionPills,
 } from "@/components/atoms";
+import { LanguagePicker } from "@/components/language-picker";
 
 type Menu = PublicMenuResponse["menus"][number];
 type Section = Menu["sections"][number];
@@ -63,7 +64,15 @@ function findAllDishesWithIngredient(
   return results;
 }
 
-export function MenuWithModal({ data, tabBar }: { data: PublicMenuResponse; tabBar?: React.ReactNode }) {
+export function MenuWithModal({
+  data,
+  tabBar,
+  activeLocale = "en",
+}: {
+  data: PublicMenuResponse;
+  tabBar?: React.ReactNode;
+  activeLocale?: string;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { restrictions, user } = useAuth();
@@ -163,27 +172,30 @@ export function MenuWithModal({ data, tabBar }: { data: PublicMenuResponse; tabB
               </svg>
               All menus
             </Link>
-            <Link
-              href={user ? "/profile" : "/login"}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "4px 10px",
-                border: "1px solid var(--rule)",
-                borderRadius: 999,
-                fontFamily: "var(--mono)",
-                fontSize: 10,
-                textTransform: "uppercase",
-                letterSpacing: "0.12em",
-                color: "var(--ink)",
-                textDecoration: "none",
-              }}
-            >
-              {user
-                ? (user.displayName ?? user.email ?? "Profile")
-                : "Preferences"}
-            </Link>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <LanguagePicker currentLocale={activeLocale} />
+              <Link
+                href={user ? "/profile" : "/login"}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "4px 10px",
+                  border: "1px solid var(--rule)",
+                  borderRadius: 999,
+                  fontFamily: "var(--mono)",
+                  fontSize: 10,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.12em",
+                  color: "var(--ink)",
+                  textDecoration: "none",
+                }}
+              >
+                {user
+                  ? (user.displayName ?? user.email ?? "Profile")
+                  : "Preferences"}
+              </Link>
+            </div>
           </div>
         </div>
 

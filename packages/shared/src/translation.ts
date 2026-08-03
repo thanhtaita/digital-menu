@@ -29,3 +29,28 @@ export const translationRowSchema = z.object({
 });
 
 export type TranslationRow = z.infer<typeof translationRowSchema>;
+
+/**
+ * Fixed allow-list of locales the AI auto-translation system will generate for (report
+ * i18n-scout-m3 §7 / captain decision #2). English is the source language and is never in this
+ * list - a request for "en" (or no locale) always serves the source-language field directly.
+ * The API additionally allows overriding this via TRANSLATION_LOCALES env (comma-separated
+ * codes), but this is the default and the single source of truth for the diner-app picker.
+ */
+export const SUPPORTED_TRANSLATION_LOCALES = [
+  { code: "es", label: "Español" },
+  { code: "fr", label: "Français" },
+  { code: "de", label: "Deutsch" },
+  { code: "it", label: "Italiano" },
+  { code: "pt", label: "Português" },
+  { code: "zh-Hans", label: "简体中文" },
+  { code: "ja", label: "日本語" },
+  { code: "ko", label: "한국어" },
+  { code: "vi", label: "Tiếng Việt" },
+  { code: "ar", label: "العربية" },
+  { code: "hi", label: "हिन्दी" }
+] as const;
+
+export type SupportedTranslationLocale = (typeof SUPPORTED_TRANSLATION_LOCALES)[number]["code"];
+
+export const SOURCE_LOCALE = "en";

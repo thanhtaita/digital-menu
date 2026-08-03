@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { eq, asc, max, inArray, and } from "drizzle-orm";
 import { db } from "../lib/db.js";
-import { dishes, menuSections, menus, dishMedia, dishTranslations } from "@digital-menu/db";
+import { dishes, menuSections, menus, dishMedia, dishTranslations, aiContentTranslations } from "@digital-menu/db";
 import { createDishSchema, updateDishSchema, reorderDishMediaSchema, upsertTranslationSchema } from "@digital-menu/shared";
 import { requireAuth } from "../middleware/auth.js";
 import { canUserManageRestaurantWithRole } from "../lib/restaurant-access.js";
@@ -394,6 +394,36 @@ export async function dishRoutes(app: FastifyInstance) {
         .from(dishTranslations)
         .where(eq(dishTranslations.dishId, dishId))
         .orderBy(asc(dishTranslations.locale));
+      return reply.send(rows);
+    }
+  );
+
+  /**
+   * GET /:dishId/ai-translations — list AI-generated cache entries for a dish, superadmin only.
+   * Restaurant admins can manage the dish but must not see the AI-vs-human distinction
+   * (i18n-scout-m3 captain decision #6) - gated separately from resolveDish's manage check.
+   */
+  app.get<{ Params: { restaurantId: string; menuId: string; sectionId: string; dishId: string } }>(
+    "/:dishId/ai-translations",
+    async (request, reply) => {
+      const auth = await requireAuth(request, reply);
+      if (!auth) return;
+      if (auth.user.role !== "superadmin") {
+        return reply.status(403).send({ error: "Forbidden", code: "FORBIDDEN" });
+      }
+      const restaurantId = Number(request.params.restaurantId);
+      const sectionId = Number(request.params.sectionId);
+      const dishId = Number(request.params.dishId);
+      if (Number.isNaN(restaurantId) || Number.isNaN(sectionId) || Number.isNaN(dishId)) {
+        return reply.status(400).send({ error: "Invalid id" });
+      }
+      const dish = await resolveDish(restaurantId, sectionId, dishId, auth.user.userId, auth.user.role);
+      if (!dish) return reply.status(404).send({ error: "Dish not found", code: "NOT_FOUND" });
+      const rows = await db
+        .select()
+        .from(aiContentTranslations)
+        .where(and(eq(aiContentTranslations.entityType, "dish"), eq(aiContentTranslations.entityId, dishId)))
+        .orderBy(asc(aiContentTranslations.locale), asc(aiContentTranslations.field));
       return reply.send(rows);
     }
   );
