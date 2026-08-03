@@ -9,6 +9,7 @@ import {
   apiCreateIngredient,
   apiDeleteIngredient,
   apiListIngredientTranslations,
+  apiListIngredientAiTranslations,
   apiUpsertIngredientTranslation,
   apiDeleteIngredientTranslation,
   apiListDietCandidates,
@@ -24,7 +25,8 @@ import {
   apiListIngredients,
   apiSearchIngredients,
   type Ingredient,
-  type TranslationRow
+  type TranslationRow,
+  type AiTranslationRow
 } from "../lib/api-client";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
@@ -80,6 +82,9 @@ export function MetaIngredientsPage() {
   const [ingTranslationDescription, setIngTranslationDescription] = useState("");
   const [ingTranslationError, setIngTranslationError] = useState<string | null>(null);
   const [ingTranslationLoading, setIngTranslationLoading] = useState(false);
+  // AI-generated translation visibility - superadmin only; this whole page is already
+  // superadmin-gated (App.tsx), so no additional per-field role check is needed here.
+  const [ingredientAiTranslations, setIngredientAiTranslations] = useState<AiTranslationRow[]>([]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQuery(searchQuery.trim()), 300);
@@ -215,8 +220,12 @@ export function MetaIngredientsPage() {
   async function loadIngredientTranslations(id: number) {
     setIngTranslationLoading(true);
     try {
-      const rows = await apiListIngredientTranslations(id);
+      const [rows, aiRows] = await Promise.all([
+        apiListIngredientTranslations(id),
+        apiListIngredientAiTranslations(id)
+      ]);
       setIngredientTranslations(rows);
+      setIngredientAiTranslations(aiRows);
     } finally {
       setIngTranslationLoading(false);
     }
@@ -1018,6 +1027,39 @@ export function MetaIngredientsPage() {
                                     {upsertIngredientTranslationM.isPending ? "Saving…" : "Save translation"}
                                   </Button>
                                 </form>
+
+                                <div className="mt-4 border-t border-slate-100 pt-3">
+                                  <p className="mb-2 text-xs font-medium text-slate-800">
+                                    AI-generated translations{" "}
+                                    <span className="font-normal text-slate-400">(superadmin only)</span>
+                                  </p>
+                                  <p className="mb-2 text-[11px] text-slate-500">
+                                    Machine-translated cache entries for locales not covered above. Diners never
+                                    see this distinction; save a manual translation for a locale to override the
+                                    AI version.
+                                  </p>
+                                  {ingredientAiTranslations.length > 0 ? (
+                                    <ul className="space-y-1">
+                                      {ingredientAiTranslations.map((t) => (
+                                        <li
+                                          key={`${t.locale}-${t.field}`}
+                                          className="rounded border border-indigo-100 bg-indigo-50 px-2 py-1.5 text-xs"
+                                        >
+                                          <span className="mr-1.5 rounded bg-indigo-200 px-1 py-0.5 font-mono text-[11px] font-semibold text-indigo-800">
+                                            {t.locale}
+                                          </span>
+                                          <span className="mr-1.5 text-[11px] font-medium text-indigo-700">
+                                            {t.field}
+                                          </span>
+                                          <span className="text-slate-800">{t.translatedValue}</span>
+                                          <span className="ml-1.5 text-[10px] text-slate-400">({t.model})</span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  ) : (
+                                    <p className="text-[11px] text-slate-400">No AI-generated translations cached yet.</p>
+                                  )}
+                                </div>
                               </>
                             )}
                           </div>

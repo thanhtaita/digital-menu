@@ -8,6 +8,7 @@ import {
   apiCreateSection,
   apiListDishIngredients,
   apiListDishTranslations,
+  apiListDishAiTranslations,
   apiUpsertDishTranslation,
   apiDeleteDishTranslation,
   apiListDishes,
@@ -133,6 +134,18 @@ export function MenuBuilderPage() {
     queryFn: () =>
       apiListDishTranslations(restaurantId, selectedMenuId!, selectedSectionId!, selectedDishId!),
     enabled: selectedMenuId != null && selectedSectionId != null && selectedDishId != null
+  });
+
+  // AI-generated translation visibility is superadmin-only (i18n-scout-m3 captain decision #6).
+  const dishAiTranslationsQ = useQuery({
+    queryKey: ["dish-ai-translations", restaurantId, selectedMenuId, selectedSectionId, selectedDishId],
+    queryFn: () =>
+      apiListDishAiTranslations(restaurantId, selectedMenuId!, selectedSectionId!, selectedDishId!),
+    enabled:
+      user?.role === "superadmin" &&
+      selectedMenuId != null &&
+      selectedSectionId != null &&
+      selectedDishId != null
   });
 
   const ingredientsQ = useQuery({
@@ -1164,6 +1177,37 @@ export function MenuBuilderPage() {
                     {upsertDishTranslationM.isPending ? "Saving…" : "Save translation"}
                   </Button>
                 </form>
+
+                {user?.role === "superadmin" && (
+                  <div className="mt-4 border-t border-slate-100 pt-3">
+                    <p className="mb-2 text-xs font-medium text-slate-800">
+                      AI-generated translations <span className="font-normal text-slate-400">(superadmin only)</span>
+                    </p>
+                    <p className="mb-2 text-[11px] text-slate-500">
+                      Machine-translated cache entries for locales not covered above. Diners never see this
+                      distinction; save a manual translation for a locale to override the AI version.
+                    </p>
+                    {dishAiTranslationsQ.data && dishAiTranslationsQ.data.length > 0 ? (
+                      <ul className="space-y-1">
+                        {dishAiTranslationsQ.data.map((t) => (
+                          <li
+                            key={`${t.locale}-${t.field}`}
+                            className="rounded border border-indigo-100 bg-indigo-50 px-2 py-1.5 text-xs"
+                          >
+                            <span className="mr-1.5 rounded bg-indigo-200 px-1 py-0.5 font-mono text-[11px] font-semibold text-indigo-800">
+                              {t.locale}
+                            </span>
+                            <span className="mr-1.5 text-[11px] font-medium text-indigo-700">{t.field}</span>
+                            <span className="text-slate-800">{t.translatedValue}</span>
+                            <span className="ml-1.5 text-[10px] text-slate-400">({t.model})</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-[11px] text-slate-400">No AI-generated translations cached yet.</p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}

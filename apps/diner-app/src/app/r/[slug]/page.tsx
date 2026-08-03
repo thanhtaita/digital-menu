@@ -1,14 +1,16 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { fetchPublicMenu } from "@/lib/public-menu";
+import { inferLocaleFromAcceptLanguage, isKnownLocale } from "@/lib/locale";
 import { MenuWithModal } from "./menu-with-modal";
 import { RestaurantPostsTab } from "@/components/social/RestaurantPostsTab";
 import { SiteHeader } from "@/components/site-header";
 
 type Props = {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; locale?: string }>;
 };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -23,8 +25,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function RestaurantMenuPage({ params, searchParams }: Props) {
   const { slug } = await params;
-  const { tab } = await searchParams;
-  const data = await fetchPublicMenu(slug);
+  const { tab, locale: explicitLocale } = await searchParams;
+
+  // Explicit ?locale= always wins. Absent that, infer a default from Accept-Language purely as
+  // the language picker's pre-selection - the diner can always override it (captain decision #1).
+  let activeLocale: string | undefined = isKnownLocale(explicitLocale) ? explicitLocale : undefined;
+  if (!activeLocale && explicitLocale === undefined) {
+    const headerList = await headers();
+    activeLocale = inferLocaleFromAcceptLanguage(headerList.get("accept-language"));
+  }
+
+  const data = await fetchPublicMenu(slug, activeLocale);
   if (!data) notFound();
 
   const activeTab = tab === "posts" ? "posts" : "menu";
@@ -52,6 +63,7 @@ export default async function RestaurantMenuPage({ params, searchParams }: Props
         >
           <MenuWithModal
             data={data}
+            activeLocale={activeLocale ?? "en"}
             tabBar={
               <div
                 style={{

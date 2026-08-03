@@ -3,16 +3,18 @@ import { AiNotConfiguredError } from "./types.js";
 
 const PROVIDER_ENV = "AI_PROVIDER";
 
-const DEFAULT_MODELS: Record<AiProvider, { chat: string; suggestion: string; summarize: string }> = {
+const DEFAULT_MODELS: Record<AiProvider, { chat: string; suggestion: string; summarize: string; translate: string }> = {
   gemini: {
     chat: "gemini-2.0-flash",
     suggestion: "gemini-2.0-flash-lite",
-    summarize: "gemini-2.0-flash-lite"
+    summarize: "gemini-2.0-flash-lite",
+    translate: "gemini-2.0-flash-lite"
   },
   openai: {
     chat: "gpt-4o-mini",
     suggestion: "gpt-4o-mini",
-    summarize: "gpt-4o-mini"
+    summarize: "gpt-4o-mini",
+    translate: "gpt-4o-mini"
   }
 };
 
@@ -56,7 +58,7 @@ export function isAiConfigured(): boolean {
 
 export function resolveModel(
   provider: AiProvider,
-  purpose: "chat" | "suggestion" | "summarize",
+  purpose: "chat" | "suggestion" | "summarize" | "translate",
   envModel?: string
 ): string {
   const trimmed = envModel?.trim();

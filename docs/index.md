@@ -25,14 +25,18 @@ Product-facing and platform work is organized into goals, each with its own feat
   protection that isn't itself a user-facing feature.
 - [`goals/diner-discovery/`](./goals/diner-discovery/README.md) - diner-facing ways to find food across the
   whole platform, starting with platform-wide search.
+- [`goals/internationalization/`](./goals/internationalization/README.md) - making diner-facing dish/
+  ingredient content available in the diner's own language, starting with AI auto-translation.
 
 Only features backfilled since this docs system was introduced (2026-07-18) have full
 `README.md`/`design.md`/`task-log.md` folders. Capability that predates this system - the ingredient
-dictionary and its approval workflow, translations, the social layer, the AI chat assistant, pgvector
-recommendations, auth, menu/dish CRUD, and more - is real and shipped, but is currently documented only in
-`docs/architecture/*.md` (birds-eye) and `.claude/skills/*/SKILL.md` (deep dives), not backfilled into a
-goal/feature folder. Add one the next time any of that capability changes nontrivially, per the
-enforcement contract in `CLAUDE.md`.
+dictionary and its approval workflow, the manual (human-entered) side of translations, the social layer,
+the AI chat assistant, pgvector recommendations, auth, menu/dish CRUD, and more - is real and shipped, but
+is currently documented only in `docs/architecture/*.md` (birds-eye) and `.claude/skills/*/SKILL.md`
+(deep dives), not backfilled into a goal/feature folder. Add one the next time any of that capability
+changes nontrivially, per the enforcement contract in `CLAUDE.md`. (The AI-generated side of translations
+*was* backfilled this way when it was added - see
+[`goals/internationalization/`](./goals/internationalization/README.md).)
 
 ## Architecture
 

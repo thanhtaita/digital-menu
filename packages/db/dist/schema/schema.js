@@ -281,6 +281,30 @@ export const ingredientTranslations = pgTable("ingredient_translations", {
     ingredientIdIdx: index("ingredient_translations_ingredient_id_idx").on(table.ingredientId)
 }));
 /**
+ * AI translation cache - disposable, hash-keyed cache for machine-generated translations.
+ * Scoped to 'dish' and 'ingredient' entity types (i18n-scout-m3 report §5). A human row in
+ * dish_translations/ingredient_translations for the same locale always takes precedence over
+ * this table at the application layer - this table is never consulted if one exists.
+ * entityType is a plain string (polymorphic association, no FK) so new entity kinds can be added
+ * later without a migration. sourceHash is a sha256 of the source-language field at generation
+ * time; a hash mismatch means the source changed since generation and the row is regenerated on
+ * next read, overwriting this row (no separate invalidation step needed).
+ */
+export const aiContentTranslations = pgTable("ai_content_translations", {
+    id: serial("id").primaryKey(),
+    entityType: text("entity_type").notNull(),
+    entityId: integer("entity_id").notNull(),
+    field: text("field").notNull(),
+    locale: text("locale").notNull(),
+    sourceHash: text("source_hash").notNull(),
+    translatedValue: text("translated_value").notNull(),
+    model: text("model").notNull(),
+    generatedAt: timestamp("generated_at").notNull().defaultNow()
+}, (table) => ({
+    entityFieldLocaleUnique: uniqueIndex("ai_content_translations_entity_field_locale_unique").on(table.entityType, table.entityId, table.field, table.locale),
+    entityIdx: index("ai_content_translations_entity_idx").on(table.entityType, table.entityId)
+}));
+/**
  * Embedding & recommendation layer (Phase 2).
  * - userPreferences: free-text preference description per user (one row per user).
  * - dishEmbeddings: 768-dim nomic-embed-text vectors for dishes (written by FastAPI server).

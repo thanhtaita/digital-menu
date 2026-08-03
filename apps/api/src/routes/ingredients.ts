@@ -17,6 +17,7 @@ import {
   ingredientFdcCandidates,
   ingredientMedia,
   ingredientTranslations,
+  aiContentTranslations,
   restaurants,
 } from "@digital-menu/db";
 import { requireAuth } from "../middleware/auth.js";
@@ -1029,6 +1030,31 @@ export async function ingredientRoutes(app: FastifyInstance) {
         .from(ingredientTranslations)
         .where(eq(ingredientTranslations.ingredientId, id))
         .orderBy(asc(ingredientTranslations.locale));
+      return reply.send(rows);
+    },
+  );
+
+  /**
+   * GET /:id/ai-translations — list AI-generated cache entries for an ingredient, superadmin only
+   * (i18n-scout-m3 captain decision #6 - AI-vs-human provenance is a superadmin-only view).
+   */
+  app.get<{ Params: { id: string } }>(
+    "/:id/ai-translations",
+    async (request, reply) => {
+      const auth = await requireAuth(request, reply);
+      if (!auth) return;
+      if (auth.user.role !== "superadmin") {
+        return reply.status(403).send({ error: "Forbidden", code: "FORBIDDEN" });
+      }
+      const id = Number(request.params.id);
+      if (Number.isNaN(id)) return reply.status(400).send({ error: "Invalid id" });
+      const [row] = await db.select({ id: ingredients.id }).from(ingredients).where(eq(ingredients.id, id)).limit(1);
+      if (!row) return reply.status(404).send({ error: "Not found", code: "NOT_FOUND" });
+      const rows = await db
+        .select()
+        .from(aiContentTranslations)
+        .where(and(eq(aiContentTranslations.entityType, "ingredient"), eq(aiContentTranslations.entityId, id)))
+        .orderBy(asc(aiContentTranslations.locale), asc(aiContentTranslations.field));
       return reply.send(rows);
     },
   );

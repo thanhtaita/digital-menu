@@ -10,6 +10,8 @@ import {
   ingredients,
   dishMedia,
   ingredientMedia,
+  dishTranslations,
+  ingredientTranslations,
   posts,
   users
 } from "@digital-menu/db";
@@ -21,6 +23,7 @@ import {
 import { buildPostsResponse, POST_SELECT_COLUMNS, FEED_PAGE_SIZE, type RawPostRow } from "../lib/post-helpers.js";
 import { searchCatalog } from "../services/search.js";
 import { SEARCH_RATE_LIMIT } from "../lib/rate-limit.js";
+import { resolveEntityTranslations, isSupportedTranslationLocale } from "../services/ai-translation.js";
 
 export async function publicMenuRoutes(app: FastifyInstance) {
   app.get("/restaurants", async () => {
@@ -54,8 +57,11 @@ export async function publicMenuRoutes(app: FastifyInstance) {
     }
   );
 
-  app.get<{ Params: { slug: string } }>("/restaurants/:slug/menu", async (request, reply) => {
+  app.get<{ Params: { slug: string }; Querystring: { locale?: string } }>("/restaurants/:slug/menu", async (request, reply) => {
     const slug = request.params.slug;
+    // Hard abuse-prevention gate (i18n-scout-m3 report §7): an unrecognized locale is treated
+    // identically to no locale at all - source text, no translation lookup of any kind.
+    const locale = isSupportedTranslationLocale(request.query.locale) ? request.query.locale : undefined;
     const [restaurant] = await db
       .select({
         id: restaurants.id,
@@ -197,6 +203,88 @@ export async function publicMenuRoutes(app: FastifyInstance) {
       sectionsByMenu.set(section.menuId, list);
     }
 
+    // Locale resolution (manual override > AI cache/generate > source fallback - see
+    // apps/api/src/services/ai-translation.ts). Resolved once per unique dish/ingredient, not
+    // once per dish-ingredient link, and run concurrently so a cold cache doesn't serialize.
+    const resolvedDishFields = new Map<number, { name: string; description: string | null }>();
+    const resolvedIngredientFields = new Map<
+      number,
+      { canonicalName: string; description: string | null; commonAllergenGroup: string | null }
+    >();
+
+    if (locale && dishIds.length > 0) {
+      const manualDishRows = await db
+        .select()
+        .from(dishTranslations)
+        .where(and(inArray(dishTranslations.dishId, dishIds), eq(dishTranslations.locale, locale)));
+      const manualByDish = new Map(manualDishRows.map((r) => [r.dishId, { name: r.name, description: r.description }]));
+
+      const manualIngredientRows =
+        uniqueIngredientIds.length === 0
+          ? []
+          : await db
+              .select()
+              .from(ingredientTranslations)
+              .where(
+                and(inArray(ingredientTranslations.ingredientId, uniqueIngredientIds), eq(ingredientTranslations.locale, locale))
+              );
+      const manualByIngredient = new Map(
+        manualIngredientRows.map((r) => [r.ingredientId, { name: r.name, description: r.description }])
+      );
+
+      const uniqueIngredientSource = new Map<
+        number,
+        { canonicalName: string; description: string | null; commonAllergenGroup: string | null }
+      >();
+      for (const row of ingredientRows) {
+        if (!uniqueIngredientSource.has(row.ingredientId)) {
+          uniqueIngredientSource.set(row.ingredientId, {
+            canonicalName: row.canonicalName,
+            description: row.description,
+            commonAllergenGroup: row.commonAllergenGroup
+          });
+        }
+      }
+
+      await Promise.all([
+        ...dishRows.map(async (dish) => {
+          const resolved = await resolveEntityTranslations({
+            entityType: "dish",
+            entityId: dish.id,
+            locale,
+            fields: [
+              { field: "name", text: dish.name },
+              { field: "description", text: dish.description }
+            ],
+            manualTranslation: manualByDish.get(dish.id) ?? null
+          });
+          resolvedDishFields.set(dish.id, {
+            name: resolved.name?.value || dish.name,
+            description: dish.description === null ? null : resolved.description?.value ?? dish.description
+          });
+        }),
+        ...[...uniqueIngredientSource.entries()].map(async ([ingredientId, source]) => {
+          const resolved = await resolveEntityTranslations({
+            entityType: "ingredient",
+            entityId: ingredientId,
+            locale,
+            fields: [
+              { field: "name", text: source.canonicalName },
+              { field: "description", text: source.description },
+              { field: "allergen_group", text: source.commonAllergenGroup }
+            ],
+            manualTranslation: manualByIngredient.get(ingredientId) ?? null
+          });
+          resolvedIngredientFields.set(ingredientId, {
+            canonicalName: resolved.name?.value || source.canonicalName,
+            description: source.description === null ? null : resolved.description?.value ?? source.description,
+            commonAllergenGroup:
+              source.commonAllergenGroup === null ? null : resolved.allergen_group?.value ?? source.commonAllergenGroup
+          });
+        })
+      ]);
+    }
+
     const payload = {
       restaurant,
       menus: menuRows.map((menu) => ({
@@ -216,10 +304,11 @@ export async function publicMenuRoutes(app: FastifyInstance) {
             }));
             const firstImage = media.find((m) => m.kind === "image");
             const derivedImageUrl = firstImage?.url ?? dish.imageUrl;
+            const dishText = resolvedDishFields.get(dish.id);
             return {
             id: dish.id,
-            name: dish.name,
-            description: dish.description,
+            name: dishText?.name ?? dish.name,
+            description: dishText ? dishText.description : dish.description,
             price: String(dish.price),
             imageUrl: derivedImageUrl,
             isAvailable: dish.isAvailable,
@@ -234,17 +323,18 @@ export async function publicMenuRoutes(app: FastifyInstance) {
               }));
               const firstIngImage = ingMedia.find((m) => m.kind === "image");
               const derivedIngImageUrl = firstIngImage?.url ?? ing.imageUrl;
+              const ingText = resolvedIngredientFields.get(ing.ingredientId);
               return {
                 id: ing.linkId,
                 ingredientId: ing.ingredientId,
-                canonicalName: ing.canonicalName,
+                canonicalName: ingText?.canonicalName ?? ing.canonicalName,
                 slug: ing.slug,
-                description: ing.description,
+                description: ingText ? ingText.description : ing.description,
                 imageUrl: derivedIngImageUrl,
                 media: ingMedia,
                 nutrients: ing.nutrients ?? null,
                 isCommonAllergen: ing.isCommonAllergen,
-                commonAllergenGroup: ing.commonAllergenGroup,
+                commonAllergenGroup: ingText ? ingText.commonAllergenGroup : ing.commonAllergenGroup,
                 dietTags: ing.dietTags ?? null,
                 isOptional: ing.isOptional
               };

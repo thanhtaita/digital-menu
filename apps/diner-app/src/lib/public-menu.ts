@@ -13,9 +13,11 @@ function getApiBase(): string {
 }
 
 export const fetchPublicMenu = cache(async function fetchPublicMenu(
-  slug: string
+  slug: string,
+  locale?: string
 ): Promise<PublicMenuResponse | null> {
-  const res = await fetch(`${getApiBase()}/public/restaurants/${encodeURIComponent(slug)}/menu`, {
+  const qs = locale ? `?locale=${encodeURIComponent(locale)}` : "";
+  const res = await fetch(`${getApiBase()}/public/restaurants/${encodeURIComponent(slug)}/menu${qs}`, {
     next: { revalidate: 60 }
   });
   if (res.status === 404) return null;

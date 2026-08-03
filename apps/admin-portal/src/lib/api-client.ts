@@ -728,6 +728,40 @@ export async function apiDeleteIngredientTranslation(ingredientId: number, local
   );
 }
 
+// AI-generated translation cache visibility (superadmin only — 403 for restaurant admins;
+// see i18n-scout-m3 captain decision #6). Never surfaced to diners, admin-portal-only.
+
+const aiTranslationRowSchema = z.object({
+  id: z.number(),
+  entityType: z.string(),
+  entityId: z.number(),
+  field: z.string(),
+  locale: z.string(),
+  translatedValue: z.string(),
+  model: z.string(),
+  generatedAt: z.string()
+});
+
+export type AiTranslationRow = z.infer<typeof aiTranslationRowSchema>;
+
+export async function apiListDishAiTranslations(
+  restaurantId: number,
+  menuId: number,
+  sectionId: number,
+  dishId: number
+): Promise<AiTranslationRow[]> {
+  const data = await request<unknown[]>(
+    `/restaurants/${restaurantId}/menus/${menuId}/sections/${sectionId}/dishes/${dishId}/ai-translations`,
+    { method: "GET" }
+  );
+  return z.array(aiTranslationRowSchema).parse(data);
+}
+
+export async function apiListIngredientAiTranslations(ingredientId: number): Promise<AiTranslationRow[]> {
+  const data = await request<unknown[]>(`/ingredients/${ingredientId}/ai-translations`, { method: "GET" });
+  return z.array(aiTranslationRowSchema).parse(data);
+}
+
 // ── AI ingredient suggestions ─────────────────────────────────────────────
 
 export type AiMatchedIngredient = {
